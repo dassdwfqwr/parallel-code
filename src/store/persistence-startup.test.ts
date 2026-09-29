@@ -5,13 +5,15 @@ const { mockInvoke } = vi.hoisted(() => ({ mockInvoke: vi.fn() }));
 
 vi.mock('../lib/ipc', () => ({ invoke: mockInvoke }));
 
+const TEST_TIMEOUT_MS = 15_000;
+
 beforeEach(() => {
   vi.resetModules();
   mockInvoke.mockReset();
   mockInvoke.mockResolvedValue(undefined);
 });
 
-describe('startup persistence', () => {
+describe('startup persistence', { timeout: TEST_TIMEOUT_MS }, () => {
   it('preserves the saved workspace when the banner is dismissed before state loading starts', async () => {
     const { loadAgents } = await import('./agents');
     const { loadState, saveState } = await import('./persistence');

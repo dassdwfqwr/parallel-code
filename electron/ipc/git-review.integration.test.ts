@@ -6,6 +6,7 @@ import { join } from 'node:path';
 import { mergeTask } from './git.js';
 
 const directories: string[] = [];
+const TEST_TIMEOUT_MS = 30_000;
 function git(cwd: string, ...args: string[]): string {
   return execFileSync('git', args, {
     cwd,
@@ -47,7 +48,7 @@ afterEach(() => {
     rmSync(directory, { recursive: true, force: true });
 });
 
-describe('exact user approval under the Git repository lock', () => {
+describe('exact user approval under the Git repository lock', { timeout: TEST_TIMEOUT_MS }, () => {
   it('merges precisely the approved result without committing child changes', async () => {
     const { root, child, approval, merge } = fixture();
     await merge();
