@@ -33,7 +33,7 @@ resolve_identity() {
 
 SIGN_IDENTITY="$(resolve_identity)"
 
-echo "==> Building Parallel Code Custom ${npm_package_version:-$(node -p "require('./package.json').version")}" 
+echo "==> Building Parallel Code Custom ${npm_package_version:-$(node -p "require('./package.json').version")}"
 echo "==> Output: $OUTPUT_DIR"
 echo "==> Signing identity: $SIGN_IDENTITY"
 
