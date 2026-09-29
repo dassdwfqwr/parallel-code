@@ -51,15 +51,23 @@ export function isSupportedAntigravityVersion(output: string): boolean {
   return true;
 }
 
-async function hasSupportedVersion(exec: AntigravityExec): Promise<boolean> {
-  if (supportedExecutors.has(exec)) return true;
+type VersionCheck = 'supported' | 'missing' | 'outdated' | 'unknown';
+
+async function checkVersion(exec: AntigravityExec): Promise<VersionCheck> {
+  if (supportedExecutors.has(exec)) return 'supported';
   try {
     const { stdout } = await exec('agy', ['--version'], commandOptions());
-    if (!isSupportedAntigravityVersion(stdout)) return false;
+    const version = parseAntigravityVersion(stdout);
+    if (!version) return 'unknown';
+    if (!isSupportedAntigravityVersion(stdout)) return 'outdated';
     supportedExecutors.add(exec);
-    return true;
-  } catch {
-    return false;
+    return 'supported';
+  } catch (err) {
+    const code =
+      typeof err === 'object' && err !== null && 'code' in err
+        ? (err as { code?: unknown }).code
+        : undefined;
+    return code === 'ENOENT' ? 'missing' : 'unknown';
   }
 }
 
@@ -149,17 +157,13 @@ function hasOnlyZeroTokenUsage(value: unknown): boolean {
   const usage = value as Record<string, unknown>;
   if (!REQUIRED_TOKEN_FIELDS.every((field) => usage[field] === 0)) return false;
 
-  const visit = (record: Record<string, unknown>): boolean => {
+  const visit = (nestedValue: unknown): boolean => {
+    if (Array.isArray(nestedValue)) return nestedValue.every((entry) => visit(entry));
+    if (typeof nestedValue !== 'object' || nestedValue === null) return true;
+    const record = nestedValue as Record<string, unknown>;
     for (const [key, nested] of Object.entries(record)) {
       if (TOKEN_FIELD_PATTERN.test(key) && nested !== 0) return false;
-      if (
-        typeof nested === 'object' &&
-        nested !== null &&
-        !Array.isArray(nested) &&
-        !visit(nested as Record<string, unknown>)
-      ) {
-        return false;
-      }
+      if (!visit(nested)) return false;
     }
     return true;
   };
@@ -225,10 +229,20 @@ export async function fetchAntigravityUsage(
   exec: AntigravityExec = execFileAsync,
   now = Date.now(),
 ): Promise<UsageResult> {
-  if (!(await hasSupportedVersion(exec))) {
+  const version = await checkVersion(exec);
+  if (version === 'missing') {
+    return { status: 'unavailable', reason: 'Antigravity CLI was not found' };
+  }
+  if (version === 'outdated') {
     return {
       status: 'unavailable',
       reason: 'Antigravity CLI 1.1.11 or newer is required for safe usage checks',
+    };
+  }
+  if (version === 'unknown') {
+    return {
+      status: 'unavailable',
+      reason: 'Unable to verify the installed Antigravity CLI version',
     };
   }
   try {

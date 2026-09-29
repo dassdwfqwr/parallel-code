@@ -145,6 +145,17 @@ describe('parseAntigravityUsageResponse', () => {
     expect(
       parseAntigravityUsageResponse({
         ...base,
+        usage: {
+          input_tokens: 0,
+          output_tokens: 0,
+          total_tokens: 0,
+          model_breakdown: [{ name: 'gemini', token_count: 0 }, { reasoning_tokens: 1 }],
+        },
+      }),
+    ).toBeNull();
+    expect(
+      parseAntigravityUsageResponse({
+        ...base,
         command: { ...(base.command as object), name: 'prompt' },
       }),
     ).toBeNull();
@@ -199,12 +210,49 @@ describe('fetchAntigravityUsage', () => {
 
   it('does not run /usage on an old or unparseable CLI', async () => {
     const old = vi.fn<AntigravityExec>().mockResolvedValue({ stdout: '1.1.10\n' });
-    await expect(fetchAntigravityUsage(old)).resolves.toMatchObject({ status: 'unavailable' });
+    await expect(fetchAntigravityUsage(old)).resolves.toEqual({
+      status: 'unavailable',
+      reason: 'Antigravity CLI 1.1.11 or newer is required for safe usage checks',
+    });
     expect(old).toHaveBeenCalledTimes(1);
 
     const unknown = vi.fn<AntigravityExec>().mockResolvedValue({ stdout: 'dev\n' });
-    await expect(fetchAntigravityUsage(unknown)).resolves.toMatchObject({ status: 'unavailable' });
+    await expect(fetchAntigravityUsage(unknown)).resolves.toEqual({
+      status: 'unavailable',
+      reason: 'Unable to verify the installed Antigravity CLI version',
+    });
     expect(unknown).toHaveBeenCalledTimes(1);
+  });
+
+  it('distinguishes a missing CLI without exposing command output', async () => {
+    const missing = vi.fn<AntigravityExec>().mockRejectedValue(
+      Object.assign(new Error('developer@example.com'), {
+        code: 'ENOENT',
+        stdout: 'secret stdout',
+        stderr: 'secret stderr',
+      }),
+    );
+    const result = await fetchAntigravityUsage(missing);
+    expect(result).toEqual({ status: 'unavailable', reason: 'Antigravity CLI was not found' });
+    expect(JSON.stringify(result)).not.toContain('secret');
+    expect(JSON.stringify(result)).not.toContain('developer@example.com');
+  });
+
+  it('maps a killed usage command to a sanitized timeout error', async () => {
+    const timeout = vi.fn<AntigravityExec>();
+    timeout.mockResolvedValueOnce({ stdout: '1.2.0\n' });
+    timeout.mockRejectedValueOnce(
+      Object.assign(new Error('developer@example.com'), {
+        code: 'ETIMEDOUT',
+        killed: true,
+        stdout: 'secret stdout',
+        stderr: 'secret stderr',
+      }),
+    );
+    const result = await fetchAntigravityUsage(timeout);
+    expect(result).toEqual({ status: 'error', message: 'Antigravity usage check timed out' });
+    expect(JSON.stringify(result)).not.toContain('secret');
+    expect(JSON.stringify(result)).not.toContain('developer@example.com');
   });
 
   it('keeps malformed output recoverable without echoing CLI output', async () => {

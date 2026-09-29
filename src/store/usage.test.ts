@@ -144,6 +144,24 @@ describe('usage store slice', () => {
     expect(mockInvoke).toHaveBeenCalledTimes(1);
   });
 
+  it('coalesces a forced refresh while the same provider request is in flight', async () => {
+    let resolveRequest: ((result: UsageResult) => void) | undefined;
+    mockInvoke.mockReturnValue(
+      new Promise<UsageResult>((resolve) => {
+        resolveRequest = resolve;
+      }),
+    );
+
+    const first = slice.refreshUsage('antigravity');
+    const forced = slice.refreshUsage('antigravity', { force: true });
+    expect(forced).toBe(first);
+    expect(mockInvoke).toHaveBeenCalledTimes(1);
+
+    resolveRequest?.(OK);
+    await Promise.all([first, forced]);
+    expect(state('antigravity')).toMatchObject({ status: 'ok', groups: OK.groups });
+  });
+
   it('throttles back-to-back refreshes per provider unless forced', async () => {
     mockInvoke.mockResolvedValue(OK);
     await slice.refreshUsage('claude');
