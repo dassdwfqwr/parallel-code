@@ -8,16 +8,10 @@ import { readPlanForWorktree, startPlanWatcher, stopAllPlanWatchers } from './pl
 
 let worktreePath: string;
 let taskId: string;
-let previousGitOptionalLocks: string | undefined;
 const PLAN_EVENT_TIMEOUT_MS = 10_000;
 const PLAN_DEBOUNCE_MS = 200;
 
 beforeEach(() => {
-  previousGitOptionalLocks = process.env.GIT_OPTIONAL_LOCKS;
-  // `git status` may refresh its index and emit a root fs.watch event on
-  // macOS. Disable that optional write so startup recovery is not mistaken
-  // for a live plan edit by the test harness.
-  process.env.GIT_OPTIONAL_LOCKS = '0';
   worktreePath = fs.mkdtempSync(path.join(os.tmpdir(), 'plan-detection-'));
   taskId = `task-${path.basename(worktreePath)}`;
   git('init', '--quiet');
@@ -27,8 +21,6 @@ afterEach(() => {
   stopAllPlanWatchers();
   fs.rmSync(worktreePath, { recursive: true, force: true });
   vi.restoreAllMocks();
-  if (previousGitOptionalLocks === undefined) delete process.env.GIT_OPTIONAL_LOCKS;
-  else process.env.GIT_OPTIONAL_LOCKS = previousGitOptionalLocks;
 });
 
 function git(...args: string[]): void {

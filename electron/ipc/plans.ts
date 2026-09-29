@@ -169,7 +169,14 @@ async function readUncommittedPlan(
       '--',
       ...candidates,
     ],
-    { cwd: worktreePath, timeout: 5_000 },
+    {
+      cwd: worktreePath,
+      timeout: 5_000,
+      // This is a read used during watcher startup. Git may otherwise refresh
+      // the index and make the root fs.watch report our own status probe as a
+      // live project change (notably as a filename-less event on macOS).
+      env: { ...process.env, GIT_OPTIONAL_LOCKS: '0' },
+    },
   );
   const changedPaths = new Set(
     stdout
