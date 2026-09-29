@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import path from 'path';
-import { resolveUserDataDir } from './user-data-dir.js';
+import { CUSTOM_USER_DATA_NAME, resolveUserDataDir } from './user-data-dir.js';
 
 describe('resolveUserDataDir', () => {
   const userData = path.join('/home', 'someone', '.config', 'parallel-code');
@@ -19,5 +19,9 @@ describe('resolveUserDataDir', () => {
   // in a sibling of the config root rather than beside the packaged profile.
   it('keeps the parent directory', () => {
     expect(path.dirname(resolveUserDataDir(userData, false))).toBe(path.dirname(userData));
+  });
+
+  it('uses a stable Custom profile name', () => {
+    expect(CUSTOM_USER_DATA_NAME).toBe('Parallel Code Custom');
   });
 });

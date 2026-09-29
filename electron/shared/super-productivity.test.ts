@@ -168,15 +168,15 @@ describe('buildSpDoneNote / appendSpNote', () => {
 
 describe('parseParallelCodeUrl', () => {
   it('accepts the new-task link', () => {
-    expect(parseParallelCodeUrl('parallelcode://new-task?spTaskId=abc_DEF-123')).toEqual({
+    expect(parseParallelCodeUrl('parallelcode-custom://new-task?spTaskId=abc_DEF-123')).toEqual({
       action: 'new-task',
       spTaskId: 'abc_DEF-123',
     });
-    expect(parseParallelCodeUrl('parallelcode://new-task/?spTaskId=x')).toEqual({
+    expect(parseParallelCodeUrl('parallelcode-custom://new-task/?spTaskId=x')).toEqual({
       action: 'new-task',
       spTaskId: 'x',
     });
-    expect(parseParallelCodeUrl('parallelcode:new-task?spTaskId=x')).toEqual({
+    expect(parseParallelCodeUrl('parallelcode-custom:new-task?spTaskId=x')).toEqual({
       action: 'new-task',
       spTaskId: 'x',
     });
@@ -192,6 +192,7 @@ describe('parseParallelCodeUrl', () => {
       'parallelcode://user:pw@new-task?spTaskId=abc',
       'parallelcode://new-task:99?spTaskId=abc',
       'parallelcode:/new-task?spTaskId=abc',
+      'parallelcode://new-task?spTaskId=abc',
       'https://new-task?spTaskId=abc',
       'not a url',
     ]) {

@@ -1,7 +1,7 @@
 /**
- * `parallelcode://` links, sent by Super Productivity's "Start in Parallel
+ * `parallelcode-custom://` links, sent by a Custom-configured Super Productivity
  * Code" task action. The only accepted link is
- * `parallelcode://new-task?spTaskId=<id>`; see parseParallelCodeUrl.
+ * `parallelcode-custom://new-task?spTaskId=<id>`; see parseParallelCodeUrl.
  *
  * A link can arrive before the renderer listens (cold start, or macOS
  * delivering `open-url` before the window exists), so the id is parked here
@@ -27,7 +27,7 @@ export function handleProtocolUrl(url: string, win: BrowserWindow | null): void 
   const parsed = parseParallelCodeUrl(url);
   if (!parsed) {
     // Log the scheme only; the rest is untrusted and may be long.
-    warn('super-productivity', 'Ignored unsupported parallelcode:// link');
+    warn('super-productivity', `Ignored unsupported ${PARALLEL_CODE_PROTOCOL}:// link`);
     return;
   }
   pendingSpTaskId = parsed.spTaskId;
@@ -41,7 +41,7 @@ export function consumePendingSpOpen(): string | null {
 }
 
 /**
- * Make this app the default handler for `parallelcode://` on macOS, where the
+ * Make this app the default handler for `parallelcode-custom://` on macOS, where the
  * bundle declares the scheme (package.json build.protocols) but another app
  * may have claimed it. Packaged builds only: a dev run would point the OS at
  * the dev Electron binary and keep it there. Linux is left alone: the .deb
@@ -51,5 +51,5 @@ export function consumePendingSpOpen(): string | null {
 export function registerParallelCodeProtocol(): void {
   if (!app.isPackaged || process.platform !== 'darwin') return;
   if (!app.setAsDefaultProtocolClient(PARALLEL_CODE_PROTOCOL))
-    warn('super-productivity', 'Could not register the parallelcode:// handler');
+    warn('super-productivity', `Could not register the ${PARALLEL_CODE_PROTOCOL}:// handler`);
 }

@@ -1,6 +1,8 @@
 import { app } from 'electron';
 import path from 'path';
 
+export const CUSTOM_USER_DATA_NAME = 'Parallel Code Custom';
+
 /**
  * Per-instance data directory, given Electron's `userData` path.
  *
@@ -15,13 +17,23 @@ export function resolveUserDataDir(userDataPath: string, isPackaged: boolean): s
 }
 
 /**
+ * Give the personal distribution a stable profile before it takes the
+ * single-instance lock or creates any Chromium storage. This prevents both the
+ * upstream app and development runs from reading or writing the Custom data.
+ */
+export function configureUserDataDir(): string {
+  const base = path.join(app.getPath('appData'), CUSTOM_USER_DATA_NAME);
+  const resolved = resolveUserDataDir(base, app.isPackaged);
+  app.setPath('userData', resolved);
+  return resolved;
+}
+
+/**
  * The per-instance data directory for this process.
  *
- * Every file the app keeps under `userData` goes here rather than under
- * `app.getPath('userData')` directly. The suffix is what keeps a dev run and an
- * installed build from writing over each other, so a caller that reaches past
- * this helper silently opts one of its files out of that separation.
+ * `configureUserDataDir` has already selected either the packaged Custom
+ * profile or its `-dev` sibling before any caller can reach this helper.
  */
 export function getUserDataDir(): string {
-  return resolveUserDataDir(app.getPath('userData'), app.isPackaged);
+  return app.getPath('userData');
 }

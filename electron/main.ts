@@ -1,5 +1,5 @@
 import { registerBrowserHandlers } from './ipc/browser.js';
-import { app, autoUpdater, BrowserWindow, Menu, ipcMain, session, shell } from 'electron';
+import { app, BrowserWindow, Menu, ipcMain, session, shell } from 'electron';
 import { buildMenuTemplate } from './menu-template.js';
 import { restoreWindow } from './window-restore.js';
 import path from 'path';
@@ -9,7 +9,7 @@ import { registerAllHandlers } from './ipc/register.js';
 import { registerLogHandler, warn as logWarn } from './log.js';
 import { loadAppState } from './ipc/persistence.js';
 import { reconcileWorktreeIntents } from './ipc/worktree-intents.js';
-import { getUserDataDir } from './user-data-dir.js';
+import { configureUserDataDir, getUserDataDir } from './user-data-dir.js';
 import { installIpcTracing } from './ipc/trace.js';
 import { startAgentHookRuntime, stopAgentHookRuntime } from './agent-hooks/runtime.js';
 import { killAllAgents } from './ipc/pty.js';
@@ -28,6 +28,11 @@ import {
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+
+// Must happen before the single-instance lock: the lock and every Chromium
+// storage directory are scoped by userData. The Custom build never shares the
+// upstream app's profile, and dev gets a separate `-dev` profile.
+configureUserDataDir();
 
 // One running copy per profile, and the lock is taken here rather than beside the
 // window wiring because Electron's guidance is to take it as early as possible and
@@ -96,10 +101,6 @@ function verifyPreloadAllowlist(): void {
 if (!app.isPackaged) verifyPreloadAllowlist();
 
 let mainWindow: BrowserWindow | null = null;
-
-// Set only while an update relaunch is genuinely in flight — see the listener
-// in `whenReady` — so `before-quit` can let that one quit through unchallenged.
-let quittingForUpdate = false;
 
 function getIconPath(): string | undefined {
   if (process.platform !== 'linux') return undefined;
@@ -232,7 +233,7 @@ function createWindow() {
 if (shouldStartApp) {
   // A second launch (icon, CLI, file manager) reaches the instance that owns
   // the lock as this event instead of starting a process of its own. On Linux
-  // a `parallelcode://` link arrives the same way, as an argv entry.
+  // a `parallelcode-custom://` link arrives the same way, as an argv entry.
   app.on('second-instance', (_event, argv) => {
     const url = findProtocolUrl(argv);
     if (url) handleProtocolUrl(url, mainWindow);
@@ -261,20 +262,6 @@ if (shouldStartApp) {
       },
     );
 
-    // electron-updater stages the install, then quits through `app.quit()`.
-    // Vetoing that quit below would leave the update staged with the app still
-    // running, so let it through — the window's own close prompt still asks about
-    // running terminals, and `autoInstallOnAppQuit` re-applies the update on the
-    // next quit if the user backs out. Both platform paths announce the relaunch
-    // on Electron's own updater immediately before quitting (the AppImage updater
-    // emits it by hand, Squirrel natively), so this is set only while a quit is
-    // genuinely in flight — unlike a flag set when the install is *requested*,
-    // which sticks for the whole session on the many paths where
-    // `quitAndInstall()` returns without quitting.
-    autoUpdater.on('before-quit-for-update', () => {
-      quittingForUpdate = true;
-    });
-
     // Listening before the window exists: a renderer cannot spawn a Claude
     // agent that misses its hooks. Failure falls back to PTY heuristics.
     await startAgentHookRuntime(() => mainWindow);
@@ -298,7 +285,7 @@ if (shouldStartApp) {
 // Consequence worth knowing: with terminals running this vetoes a macOS
 // logout/restart too, the way any app with a confirm-on-quit prompt does.
 app.on('before-quit', (event) => {
-  if (!mainWindow || mainWindow.isDestroyed() || quittingForUpdate) return;
+  if (!mainWindow || mainWindow.isDestroyed()) return;
   event.preventDefault();
   // The confirmation is a sheet on this window — a quit from the menu while the
   // app sits hidden or minimized must not prompt somewhere the user cannot see.
@@ -310,14 +297,8 @@ app.on('before-quit', (event) => {
 // anything the user still had a chance to cancel.
 app.on('will-quit', () => {
   // Hand the lock over before the blocking teardown below, not at process exit.
-  // electron-updater's AppImage path spawns the replacement *before* quitting
-  // (`doInstall` → `spawnLog(destination)`, then `setImmediate(() =>
-  // app.quit())`), so the incoming process is already booting while this one is
-  // still killing agents — and `killAllAgents()` blocks on a `docker kill` per
-  // session. Holding the lock through that can make the replacement fail it and
-  // quit: update applied, app never reappears. Releasing here also covers the
-  // plain case, where someone relaunching during a slow shutdown would
-  // otherwise be handed a window that is already going away.
+  // Someone relaunching during a slow shutdown should not be handed a window
+  // that is already going away.
   //
   // `will-quit` only runs on a quit that got past the veto above, so a
   // cancelled quit correctly keeps the lock. A no-op when none is held.

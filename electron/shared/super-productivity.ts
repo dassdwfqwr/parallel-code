@@ -173,9 +173,9 @@ export function appendSpNote(existing: string, line: string): string {
 }
 
 // ---------------------------------------------------------------------------
-// parallelcode:// links
+// parallelcode-custom:// links (kept independent from the upstream app)
 
-export const PARALLEL_CODE_PROTOCOL = 'parallelcode';
+export const PARALLEL_CODE_PROTOCOL = 'parallelcode-custom';
 
 /** Super Productivity task and project ids are nanoids (or `INBOX_PROJECT`); allow headroom. */
 const SP_ID_PATTERN = /^[A-Za-z0-9_-]{1,64}$/;
@@ -185,7 +185,8 @@ export function isValidSpId(value: unknown): value is string {
 }
 
 /**
- * The only link Parallel Code accepts: `parallelcode://new-task?spTaskId=<id>`.
+ * The only link Parallel Code Custom accepts:
+ * `parallelcode-custom://new-task?spTaskId=<id>`.
  * It carries an opaque id and nothing else — the task's content is fetched
  * from Super Productivity, and the link only pre-fills the New Task panel —
  * so a web page that fires it can at most open a form for the user's own task.
@@ -199,8 +200,9 @@ export function parseParallelCodeUrl(url: string): { action: 'new-task'; spTaskI
   }
   if (parsed.protocol !== `${PARALLEL_CODE_PROTOCOL}:`) return null;
   if (parsed.username || parsed.password || parsed.port) return null;
-  // The action is the host (`parallelcode://new-task`, optionally with a
-  // trailing slash) or, without one, the whole path (`parallelcode:new-task`).
+  // The action is the host (`parallelcode-custom://new-task`, optionally with a
+  // trailing slash) or, without one, the whole path
+  // (`parallelcode-custom:new-task`).
   const action = parsed.host
     ? parsed.pathname === '' || parsed.pathname === '/'
       ? parsed.host

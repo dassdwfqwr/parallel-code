@@ -1,6 +1,6 @@
 {
   "name": "parallel-code",
-  "version": "3.1.0",
+  "version": "3.1.0-custom.1",
   "description": "",
   "author": {
     "name": "Johannes Millan",
@@ -39,7 +39,8 @@
     "release": "npm run typecheck && npm version patch && git push --follow-tags",
     "postinstall": "node scripts/fix-node-pty-spawn-helper.mjs",
     "prepare": "husky && git config core.hooksPath .husky",
-    "dev:investigation": "concurrently -k \"vite --config electron/vite.config.electron.ts --port 1422\" \"wait-on http://localhost:1422/investigation.html && electron --no-sandbox scripts/investigation-spike.mjs\""
+    "dev:investigation": "concurrently -k \"vite --config electron/vite.config.electron.ts --port 1422\" \"wait-on http://localhost:1422/investigation.html && electron --no-sandbox scripts/investigation-spike.mjs\"",
+    "build:custom:mac": "bash scripts/build-custom-macos.sh"
   },
   "license": "MIT",
   "scarfSettings": {
@@ -120,20 +121,13 @@
     "*.{js,cjs,json,md,html,css}": "prettier --write"
   },
   "build": {
-    "appId": "com.parallel-code.app",
-    "productName": "Parallel Code",
+    "appId": "com.parallel-code.custom",
+    "productName": "Parallel Code Custom",
     "afterPack": "./scripts/after-pack.cjs",
     "directories": {
       "buildResources": "build",
       "output": "release"
     },
-    "publish": [
-      {
-        "provider": "github",
-        "owner": "johannesjo",
-        "repo": "parallel-code"
-      }
-    ],
     "files": [
       "dist/**/*",
       "dist-electron/**/*",
@@ -158,9 +152,9 @@
     ],
     "protocols": [
       {
-        "name": "Parallel Code",
+        "name": "Parallel Code Custom",
         "schemes": [
-          "parallelcode"
+          "parallelcode-custom"
         ]
       }
     ],
@@ -172,7 +166,7 @@
       "category": "Development",
       "desktop": {
         "entry": {
-          "StartupWMClass": "parallel-code",
+          "StartupWMClass": "parallel-code-custom",
           "StartupNotify": "true"
         }
       }
@@ -185,13 +179,16 @@
       "category": "public.app-category.developer-tools",
       "hardenedRuntime": true,
       "extendInfo": {
-        "NSMicrophoneUsageDescription": "Parallel Code needs microphone access for voice input in terminal sessions."
+        "NSMicrophoneUsageDescription": "Parallel Code Custom needs microphone access for voice input in terminal sessions."
       },
       "gatekeeperAssess": false,
-      "notarize": true,
+      "notarize": false,
       "x64ArchFiles": "Contents/Resources/app.asar.unpacked/node_modules/node-pty/prebuilds/**",
       "entitlements": "build/entitlements.mac.plist",
       "entitlementsInherit": "build/entitlements.mac.plist"
+    },
+    "extraMetadata": {
+      "name": "parallel-code-custom"
     }
   }
 }

@@ -1,6 +1,6 @@
-// Auto-update store slice — tracks the backend updater's status and exposes
-// check / download / install actions to the Settings UI. Status is transient
-// (not persisted): it is re-derived from the main process on every launch.
+// Update-status store slice. Parallel Code Custom keeps the upstream IPC
+// surface but its backend reports a manual-only policy and never contacts a
+// release feed. Status is transient and re-derived on every launch.
 
 import { createSignal } from 'solid-js';
 import { invoke, fireAndForget } from '../lib/ipc';
@@ -55,7 +55,7 @@ export function startUpdateSubscription(): () => void {
   return off;
 }
 
-/** Ask the main process to check GitHub Releases for a newer version. */
+/** Ask the main process for update status (a no-op in the manual Custom build). */
 export async function checkForUpdates(): Promise<void> {
   try {
     const s = await invoke<UpdateStatus>(IPC.CheckForUpdates);

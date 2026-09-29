@@ -1,5 +1,5 @@
 /**
- * "Start in Parallel Code" from Super Productivity: a `parallelcode://` link
+ * "Start in Parallel Code" from Super Productivity: a `parallelcode-custom://` link
  * parks a Super Productivity task id in the main process; this pulls it,
  * fetches the task and pre-fills the New Task panel. Nothing starts until the
  * user submits the form.

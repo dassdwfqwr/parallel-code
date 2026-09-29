@@ -988,8 +988,8 @@ export function SettingsDialog(props: SettingsDialogProps) {
               <Switch>
                 <Match when={updateStatus().phase === 'unsupported'}>
                   <span style={updateMessageStyle(theme.fgSubtle)}>
-                    Automatic updates are not available for this build. Download the latest release
-                    from GitHub to update.
+                    This personal Custom build uses manual updates. Automatic checks are disabled
+                    and no release feed is contacted.
                   </span>
                 </Match>
 
