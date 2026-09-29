@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import os from 'os';
 import { join, dirname } from 'path';
+import { fileURLToPath } from 'node:url';
 import {
   NOT_READY_AGENT_FRAME_FIXTURES,
   READY_AGENT_FRAME_FIXTURES,
@@ -5986,12 +5987,12 @@ describe('preload.cjs MCP channel allowlist', () => {
     const { readFileSync } = await vi.importActual<typeof import('fs')>('fs');
     const path = await import('node:path');
     const preloadPath = path.join(
-      path.dirname(new URL(import.meta.url).pathname),
+      path.dirname(fileURLToPath(import.meta.url)),
       '..',
       'preload.cjs',
     );
     const manifestPath = path.join(
-      path.dirname(new URL(import.meta.url).pathname),
+      path.dirname(fileURLToPath(import.meta.url)),
       '..',
       'ipc',
       'channel-manifest.json',

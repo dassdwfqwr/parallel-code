@@ -44,6 +44,8 @@ const DOC = [
   '',
 ].join('\n');
 
+const GIT_INTEGRATION_TIMEOUT_MS = 30_000;
+
 let root: string;
 let fakeAgent: string;
 const events: DocumentRunEvent[] = [];
@@ -103,7 +105,7 @@ afterAll(() => {
   fs.rmSync(root, { recursive: true, force: true });
 });
 
-describe('document workspace lifecycle', () => {
+describe('document workspace lifecycle', { timeout: GIT_INTEGRATION_TIMEOUT_MS }, () => {
   it('combines concurrent independent revisions and rejects an overlapping revision without losing work', async () => {
     const parallelRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'pc-docws-parallel-'));
     const binDir = fs.mkdtempSync(path.join(os.tmpdir(), 'pc-docws-parallel-bin-'));

@@ -76,10 +76,13 @@ it('configures a task-scoped MCP without changing project config and restricts c
 
 it('puts Docker configs and the server inside the task mount', () => {
   const args = prepareCanvasMcpArgs({ ...options(), dockerMode: true });
-  expect(args[1]).toBe(path.join(directory, '.parallel-code', `parallel-code-canvas-${id}.json`));
+  const realDirectory = fs.realpathSync(directory);
+  expect(args[1]).toBe(
+    path.join(realDirectory, '.parallel-code', `parallel-code-canvas-${id}.json`),
+  );
   const config = JSON.parse(fs.readFileSync(args[1], 'utf8'));
   expect(config.mcpServers['parallel-code'].args[0]).toBe(
-    path.join(directory, '.parallel-code', 'canvas-mcp-server.cjs'),
+    path.join(realDirectory, '.parallel-code', 'canvas-mcp-server.cjs'),
   );
   expect(fs.readFileSync(config.mcpServers['parallel-code'].args[0], 'utf8')).toBe('// server');
 });

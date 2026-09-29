@@ -15,7 +15,10 @@ function git(root: string, ...args: string[]) {
   return execFileSync('git', args, { cwd: root, encoding: 'utf8' }).trim();
 }
 
-describe('candidate refinement', () => {
+const GIT_INTEGRATION_TIMEOUT_MS = 30_000;
+const RUN_FINISH_TIMEOUT_MS = 20_000;
+
+describe('candidate refinement', { timeout: GIT_INTEGRATION_TIMEOUT_MS }, () => {
   it('starts from the proposal, keeps canonical edits untouched, and accepts the complete revision', async () => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'pc-refine-'));
     roots.push(root);
@@ -43,7 +46,9 @@ describe('candidate refinement', () => {
     };
     const first = await dispatchDocumentRun(win, args);
     await expect
-      .poll(async () => (await listDocumentRuns(root)).find((r) => r.id === first.id)?.status)
+      .poll(async () => (await listDocumentRuns(root)).find((r) => r.id === first.id)?.status, {
+        timeout: RUN_FINISH_TIMEOUT_MS,
+      })
       .toBe('finished');
     const original = fs.readFileSync(path.join(root, 'plan.md'), 'utf8');
     fs.writeFileSync(path.join(root, 'plan.md'), original.replace('# Plan', '# Local title'));
@@ -54,7 +59,9 @@ describe('candidate refinement', () => {
       refinement,
     });
     await expect
-      .poll(async () => (await listDocumentRuns(root)).find((r) => r.id === next.id)?.status)
+      .poll(async () => (await listDocumentRuns(root)).find((r) => r.id === next.id)?.status, {
+        timeout: RUN_FINISH_TIMEOUT_MS,
+      })
       .toBe('finished');
     const finished = (await listDocumentRuns(root)).find((r) => r.id === next.id);
     if (!finished) throw new Error('Refinement run not found');
