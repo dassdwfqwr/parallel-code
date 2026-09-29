@@ -897,30 +897,41 @@ describe('prompt draft persistence', () => {
 });
 
 describe('AI terminal layout persistence', () => {
-  it.each(['tabs', 'split'] as const)('persists an explicit %s layout choice', async (layout) => {
-    setStore('taskOrder', ['task-1']);
-    setStore('tasks', {
-      'task-1': {
-        id: 'task-1',
-        name: 'Task',
-        projectId: 'project-1',
-        branchName: 'task/task-1',
-        worktreePath: '/repo/.worktrees/task-1',
-        agentIds: [],
-        shellAgentIds: [],
-        notes: '',
-        lastPrompt: '',
-        gitIsolation: 'worktree',
-        aiTerminalLayout: layout,
-      },
-    });
-    mockInvoke.mockResolvedValueOnce(undefined);
+  it.each(['tabs', 'split'] as const)(
+    'keeps an explicit %s layout through save and reload',
+    async (layout) => {
+      setStore('taskOrder', ['task-1']);
+      setStore('tasks', {
+        'task-1': {
+          id: 'task-1',
+          name: 'Task',
+          projectId: 'project-1',
+          branchName: 'task/task-1',
+          worktreePath: '/repo/.worktrees/task-1',
+          agentIds: [],
+          shellAgentIds: [],
+          notes: '',
+          lastPrompt: '',
+          gitIsolation: 'worktree',
+          aiTerminalLayout: layout,
+        },
+      });
+      mockInvoke.mockResolvedValueOnce(undefined);
 
-    await saveState();
+      await saveState();
 
-    const saved = JSON.parse(mockInvoke.mock.calls[0][1].json);
-    expect(saved.tasks['task-1'].aiTerminalLayout).toBe(layout);
-  });
+      const savedJson = mockInvoke.mock.calls[0][1].json as string;
+      expect(JSON.parse(savedJson).tasks['task-1'].aiTerminalLayout).toBe(layout);
+
+      setStore('taskOrder', []);
+      setStore('tasks', {});
+      mockInvoke.mockReset();
+      mockInvoke.mockResolvedValueOnce(savedJson);
+      await loadState();
+
+      expect(store.tasks['task-1'].aiTerminalLayout).toBe(layout);
+    },
+  );
 
   it('migrates missing layouts to tabs and preserves an explicit split choice', async () => {
     const def = agentDef();

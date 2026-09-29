@@ -34,12 +34,13 @@ import { ChangedFilesList } from './ChangedFilesList';
 import { CloseIcon } from './icons';
 import type { FileDiff } from '../lib/unified-diff-parser';
 import type { ReviewAnnotation } from './review-types';
-import type { CommitInfo } from '../ipc/types';
+import type { ChangedFile, CommitInfo } from '../ipc/types';
 import type { GitIsolationMode } from '../store/types';
 import { ChangeTour } from './ChangeTour';
 import { createChangeTour, type ChangeTourController } from '../lib/create-change-tour';
 import type { TourLocation } from '../lib/change-tour';
 import { store, updateTaskNotes } from '../store/store';
+import type { UnderstandingTourState } from '../lib/create-understanding-tour';
 
 interface DiffViewerDialogProps {
   tour?: ChangeTourController;
@@ -73,6 +74,12 @@ interface DiffViewerDialogProps {
   gitIsolation?: GitIsolationMode;
   /** Optional structured-finding source. Providers capture their own repository context. */
   findingProvider?: QualityFindingProvider;
+  /** Opens a Markdown file from the review inventory in the task canvas. */
+  onOpenMarkdownClick?: (file: ChangedFile) => void;
+  /** Starts or reopens the guided explanation for a changed file. */
+  onUnderstandClick?: (file: ChangedFile) => void;
+  /** Per-file guided-explanation state shown by ChangedFilesList. */
+  understanding?: UnderstandingTourState;
 }
 
 /** Compile review annotations into a prompt string for the agent. */
@@ -147,6 +154,9 @@ export function DiffViewerDialog(props: DiffViewerDialogProps) {
             onCommitNavigate={props.onCommitNavigate}
             gitIsolation={props.gitIsolation}
             findingProvider={props.findingProvider}
+            onOpenMarkdownClick={props.onOpenMarkdownClick}
+            onUnderstandClick={props.onUnderstandClick}
+            understanding={props.understanding}
           />
         </Show>
       </Dialog>
@@ -573,6 +583,9 @@ function DiffViewerContent(props: DiffViewerDialogProps & { tour: ChangeTourCont
               selectedCommit={props.selectedCommit}
               activeFilePath={activeFilePath()}
               onFileClick={(file) => setActiveFilePath(file.path)}
+              onOpenMarkdownClick={props.onOpenMarkdownClick}
+              onUnderstandClick={props.onUnderstandClick}
+              understanding={props.understanding}
             />
           </div>
           <Show when={task()}>

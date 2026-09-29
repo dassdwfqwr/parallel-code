@@ -1,4 +1,4 @@
-import { createSignal, type JSX } from 'solid-js';
+import { createSignal, type ComponentProps, type JSX } from 'solid-js';
 import { render } from 'solid-js/web';
 import { afterEach, expect, it, vi } from 'vitest';
 import { invoke } from '../lib/ipc';
@@ -11,6 +11,7 @@ import type { ChangedFile } from '../ipc/types';
 import { useReview } from './ReviewProvider';
 import { store, updateTaskNotes } from '../store/store';
 import type { Task } from '../store/types';
+import type { ChangedFilesList } from './ChangedFilesList';
 
 const channels = vi.hoisted(
   () =>
@@ -48,9 +49,34 @@ vi.mock('./Dialog', () => ({
   Dialog: (props: { children: JSX.Element }) => <div>{props.children}</div>,
 }));
 vi.mock('./ChangedFilesList', () => ({
-  ChangedFilesList: (props: { filesOverride?: ChangedFile[] }) => (
-    <div data-testid="file-list">{props.filesOverride?.map((file) => file.path).join(',')}</div>
-  ),
+  ChangedFilesList: (props: ComponentProps<typeof ChangedFilesList>) => {
+    const file: ChangedFile = {
+      path: 'docs/review.md',
+      status: 'M',
+      committed: false,
+      lines_added: 2,
+      lines_removed: 1,
+    };
+    return (
+      <div
+        data-testid="file-list"
+        data-coverage={props.coverageReportPath ?? ''}
+        data-understanding={props.understanding ? 'connected' : 'missing'}
+      >
+        {props.filesOverride?.map((item) => item.path).join(',')}
+        <button
+          data-testid="open-markdown"
+          aria-label="Open Markdown"
+          onClick={() => props.onOpenMarkdownClick?.(file)}
+        />
+        <button
+          data-testid="understand-file"
+          aria-label="Understand file"
+          onClick={() => props.onUnderstandClick?.(file)}
+        />
+      </div>
+    );
+  },
 }));
 vi.mock('./ReviewSidebarPanel', async (importOriginal) => ({
   ...(await importOriginal<typeof import('./ReviewSidebarPanel')>()),
@@ -90,7 +116,11 @@ afterEach(() => {
 });
 
 const diff = 'diff --git a/first.ts b/first.ts\n@@ -1 +1 @@\n-old\n+new\n';
-function mount(background = false, rawDiff = diff) {
+function mount(
+  background = false,
+  rawDiff = diff,
+  extra: Partial<ComponentProps<typeof DiffViewerDialog>> = {},
+) {
   vi.mocked(invoke).mockImplementation(async (channel) =>
     channel === IPC.GetAllFileDiffs
       ? rawDiff
@@ -123,6 +153,7 @@ function mount(background = false, rawDiff = diff) {
           worktreePath="/repo"
           taskId="task"
           onClose={() => setTarget(null)}
+          {...extra}
         />
       </>
     );
@@ -295,6 +326,36 @@ it('loads the whole diff when opened without a file to scroll to', async () => {
     ),
   );
   expect(host.querySelector('h2')?.textContent).toContain('all changes');
+});
+
+it('mounts the complete review inventory with coverage and file actions only while open', () => {
+  const onOpenMarkdownClick = vi.fn();
+  const onUnderstandClick = vi.fn();
+  const understanding = {} as ComponentProps<typeof ChangedFilesList>['understanding'];
+  const { host, setTarget } = mount(true, diff, {
+    coverageReportPath: 'coverage/custom-summary.json',
+    onOpenMarkdownClick,
+    onUnderstandClick,
+    understanding,
+  });
+
+  expect(host.querySelector('[data-testid="file-list"]')).toBeNull();
+  setTarget('');
+  const inventory = host.querySelector<HTMLElement>('[data-testid="file-list"]');
+  expect(inventory?.dataset.coverage).toBe('coverage/custom-summary.json');
+  expect(inventory?.dataset.understanding).toBe('connected');
+
+  host.querySelector<HTMLButtonElement>('[data-testid="open-markdown"]')?.click();
+  host.querySelector<HTMLButtonElement>('[data-testid="understand-file"]')?.click();
+  expect(onOpenMarkdownClick).toHaveBeenCalledWith(
+    expect.objectContaining({ path: 'docs/review.md' }),
+  );
+  expect(onUnderstandClick).toHaveBeenCalledWith(
+    expect.objectContaining({ path: 'docs/review.md' }),
+  );
+
+  setTarget(null);
+  expect(host.querySelector('[data-testid="file-list"]')).toBeNull();
 });
 
 it('shares task notes with the changed-files dialog and retains edits after reopening', () => {

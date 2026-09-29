@@ -26,6 +26,8 @@ import {
   showNotification,
   setTaskSplitMode,
   isTaskCanvasVisible,
+  setActiveTask,
+  openCanvasDocument,
 } from '../store/store';
 import { useFocusRegistration } from '../lib/focus-registration';
 import { scheduleTaskFocus } from '../store/focused-panel';
@@ -245,6 +247,19 @@ export function TaskPanel(props: TaskPanelProps) {
       planContent: props.task.planContent ?? '',
       subject: planTourSubject(props.task),
     });
+  const openFileTour = (filePath: string) =>
+    startOrOpenTour({
+      kind: 'file',
+      taskName: props.task.name,
+      worktreePath: props.task.worktreePath,
+      filePath,
+    });
+  const openMarkdownFromReview = (filePath: string) => {
+    setActiveTask(props.task.id);
+    openCanvasDocument(props.task.id, filePath);
+    setTaskFocusedPanel(props.task.id, 'canvas');
+    setDiffScrollTarget(null);
+  };
   /** A document open on the canvas is read fresh, so an edited file gets a new tour. */
   const openDocumentTour = (path: string) => {
     const { worktreePath, name: taskName } = props.task;
@@ -1160,6 +1175,9 @@ export function TaskPanel(props: TaskPanelProps) {
           }}
           gitIsolation={props.task.gitIsolation}
           findingProvider={devQualityFindingProvider ?? eslintQualityFindingProvider}
+          onOpenMarkdownClick={(file) => openMarkdownFromReview(file.path)}
+          onUnderstandClick={(file) => openFileTour(file.path)}
+          understanding={understanding}
         />
       </Show>
       <EditProjectDialog project={editingProject()} onClose={() => setEditingProjectId(null)} />

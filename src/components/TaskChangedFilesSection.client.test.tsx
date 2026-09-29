@@ -96,14 +96,20 @@ it('uses a lightweight inventory and exposes explicit review states', () => {
   const review = container.querySelector<HTMLButtonElement>('.task-review-changes-button');
   expect(review?.textContent).toBe('Loading changes…');
   expect(review?.getAttribute('aria-disabled')).toBe('true');
+  review?.click();
+  expect(onReviewClick).not.toHaveBeenCalled();
 
   inventory.report({ status: 'ready', count: 0 });
   expect(review?.textContent).toBe('No changes');
   expect(review?.getAttribute('aria-disabled')).toBe('true');
+  review?.click();
+  expect(onReviewClick).not.toHaveBeenCalled();
 
   inventory.report({ status: 'error', count: 0 });
   expect(review?.textContent).toBe('Changes unavailable');
   expect(review?.getAttribute('title')).toBe('Could not load changed files');
+  review?.click();
+  expect(onReviewClick).not.toHaveBeenCalled();
 
   inventory.report({ status: 'ready', count: 4 });
   expect(review?.textContent).toBe('Review 4');

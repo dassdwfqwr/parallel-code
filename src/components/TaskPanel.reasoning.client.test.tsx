@@ -12,9 +12,11 @@ import {
   toggleFocusMode,
   setTaskFocusedPanel,
   setTaskSplitMode,
+  openCanvasDocument,
 } from '../store/store';
 import { GIST_LABEL } from '../lib/understanding-tour';
 import type { Task } from '../store/types';
+import type { ChangedFile } from '../ipc/types';
 import type { DiffViewerDialog } from './DiffViewerDialog';
 import type { TaskNotesBody } from './TaskNotesBody';
 import type { UnderstandingTourDialog } from './UnderstandingTourDialog';
@@ -54,6 +56,7 @@ vi.mock('../store/store', () => {
     isPanelFocused: () => false,
     openCanvasReasoning: vi.fn(),
     openCanvasMindMap: vi.fn(),
+    openCanvasDocument: vi.fn(),
     openCanvasBrowser: vi.fn(),
     showNotification: vi.fn(),
     registerAction: vi.fn(),
@@ -123,6 +126,35 @@ vi.mock('./DiffViewerDialog', () => ({
       </button>
       <button class="test-diff-close" onClick={() => props.onClose()}>
         Close
+      </button>
+      <button
+        class="test-diff-markdown"
+        onClick={() =>
+          props.onOpenMarkdownClick?.({
+            path: 'docs/review.md',
+            status: 'M',
+            committed: false,
+            lines_added: 2,
+            lines_removed: 1,
+          } satisfies ChangedFile)
+        }
+      >
+        Open Markdown
+      </button>
+      <button
+        class="test-diff-understand"
+        data-connected={props.understanding ? 'true' : 'false'}
+        onClick={() =>
+          props.onUnderstandClick?.({
+            path: 'docs/review.md',
+            status: 'M',
+            committed: false,
+            lines_added: 2,
+            lines_removed: 1,
+          } satisfies ChangedFile)
+        }
+      >
+        Understand file
       </button>
     </div>
   ),
@@ -209,6 +241,7 @@ afterEach(() => {
   document.body.replaceChildren();
   channels.length = 0;
   vi.mocked(showNotification).mockClear();
+  vi.mocked(openCanvasDocument).mockClear();
   panelSizes.clear();
 });
 
@@ -567,6 +600,30 @@ it('opens the all-changes diff from the compact review entry', () => {
   const diff = expectDefined(container.querySelector<HTMLElement>('.test-diff'));
   expect(diff.dataset.open).toBe('true');
   expect(diff.dataset.file).toBe('');
+});
+
+it('wires Markdown and understanding actions from the full review inventory', async () => {
+  const { container } = mountEmptyTask();
+  fileInventory.report(1);
+  const review = () =>
+    expectDefined(container.querySelector<HTMLButtonElement>('.test-review-changes'));
+
+  review().click();
+  expect(container.querySelector<HTMLElement>('.test-diff-understand')?.dataset.connected).toBe(
+    'true',
+  );
+  expectDefined(container.querySelector<HTMLButtonElement>('.test-diff-markdown')).click();
+  expect(openCanvasDocument).toHaveBeenCalledWith('task', 'docs/review.md');
+  expect(setTaskFocusedPanel).toHaveBeenCalledWith('task', 'canvas');
+  expect(container.querySelector<HTMLElement>('.test-diff')?.dataset.open).toBe('false');
+
+  review().click();
+  expectDefined(container.querySelector<HTMLButtonElement>('.test-diff-understand')).click();
+  await flush();
+  const tour = expectDefined(container.querySelector<HTMLElement>('.test-understanding')).dataset;
+  expect(tour.kind).toBe('file');
+  expect(tour.subject).toBe('docs/review.md');
+  expect(tour.open).toBe('false');
 });
 
 it('reveals empty Notes only when keyboard navigation targets Notes', () => {
