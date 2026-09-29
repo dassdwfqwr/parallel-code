@@ -15,8 +15,8 @@ import type { CanvasTaskLink, CanvasTaskSource } from '../lib/canvas-task-links'
 import type {
   AgentDef,
   StepEntry,
+  UsageGroup,
   UsageProvider,
-  UsageWindow,
   VerificationRun,
   WorktreeStatus,
 } from '../ipc/types';
@@ -498,8 +498,7 @@ export interface MCPStatus {
 }
 
 export interface UsageState {
-  fiveHour: UsageWindow | null;
-  sevenDay: UsageWindow | null;
+  groups: UsageGroup[];
   /** When the current windows were fetched; null until the first success. */
   fetchedAt: number | null;
   /** `unavailable` means no subscription login — the bar hides. `error` keeps the last snapshot. */

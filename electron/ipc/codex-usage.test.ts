@@ -60,8 +60,14 @@ describe('parseCodexUsageResponse', () => {
     );
     expect(result).toEqual({
       status: 'ok',
-      fiveHour: { usedPercent: 12, resetsAt: 1_738_425_600_000 },
-      sevenDay: { usedPercent: 100, resetsAt: 1_738_900_000_000 },
+      groups: [
+        {
+          id: 'codex',
+          label: 'Codex',
+          fiveHour: { usedPercent: 12, resetsAt: 1_738_425_600_000 },
+          sevenDay: { usedPercent: 100, resetsAt: 1_738_900_000_000 },
+        },
+      ],
       fetchedAt: NOW,
     });
   });
@@ -73,8 +79,14 @@ describe('parseCodexUsageResponse', () => {
     );
     expect(result).toEqual({
       status: 'ok',
-      fiveHour: { usedPercent: 5, resetsAt: NOW + 90_000 },
-      sevenDay: null,
+      groups: [
+        {
+          id: 'codex',
+          label: 'Codex',
+          fiveHour: { usedPercent: 5, resetsAt: NOW + 90_000 },
+          sevenDay: null,
+        },
+      ],
       fetchedAt: NOW,
     });
   });
@@ -141,7 +153,7 @@ describe('fetchCodexUsage', () => {
     });
     const result = await fetchCodexUsage(home(CHATGPT_AUTH));
     expect(result.status).toBe('ok');
-    if (result.status === 'ok') expect(result.fiveHour?.usedPercent).toBe(42);
+    if (result.status === 'ok') expect(result.groups[0]?.fiveHour?.usedPercent).toBe(42);
     expect(sentHeaders(fetchMock)).toEqual({
       Authorization: 'Bearer secret-token',
       'ChatGPT-Account-Id': 'acct-1',

@@ -201,7 +201,7 @@ export interface StepEntry {
 }
 
 /** Agents whose subscription rate limits the app can read. */
-export type UsageProvider = 'claude' | 'codex';
+export type UsageProvider = 'claude' | 'codex' | 'antigravity';
 
 export interface UsageWindow {
   /** Percent of the window consumed, 0–100. */
@@ -210,11 +210,20 @@ export interface UsageWindow {
   resetsAt: number | null;
 }
 
+/** One independently metered model pool exposed by a provider. */
+export interface UsageGroup {
+  /** Stable app-facing identifier, e.g. `gemini` or `third-party`. */
+  id: string;
+  /** Full user-facing pool name. */
+  label: string;
+  fiveHour: UsageWindow | null;
+  sevenDay: UsageWindow | null;
+}
+
 export type UsageResult =
   | {
       status: 'ok';
-      fiveHour: UsageWindow | null;
-      sevenDay: UsageWindow | null;
+      groups: UsageGroup[];
       fetchedAt: number;
     }
   /** No subscription login to read — the status bar hides itself. */

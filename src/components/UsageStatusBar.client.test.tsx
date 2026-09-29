@@ -5,8 +5,7 @@ import { UsageStatusBar } from './UsageStatusBar';
 
 const { mockRefreshUsage, usage } = vi.hoisted(() => {
   const idle: UsageState = {
-    fiveHour: null,
-    sevenDay: null,
+    groups: [],
     fetchedAt: null,
     status: 'idle',
     error: null,
@@ -16,13 +15,38 @@ const { mockRefreshUsage, usage } = vi.hoisted(() => {
     mockRefreshUsage: vi.fn(),
     usage: {
       claude: {
-        fiveHour: { usedPercent: 40, resetsAt: inAnHour },
-        sevenDay: { usedPercent: 10, resetsAt: inAnHour },
+        groups: [
+          {
+            id: 'claude',
+            label: 'Claude',
+            fiveHour: { usedPercent: 40, resetsAt: inAnHour },
+            sevenDay: { usedPercent: 10, resetsAt: inAnHour },
+          },
+        ],
         fetchedAt: Date.now(),
         status: 'ok',
         error: null,
       } satisfies UsageState,
-      codex: idle,
+      codex: { ...idle },
+      antigravity: {
+        groups: [
+          {
+            id: 'gemini',
+            label: 'Gemini Models',
+            fiveHour: { usedPercent: 25, resetsAt: inAnHour },
+            sevenDay: { usedPercent: 30, resetsAt: inAnHour },
+          },
+          {
+            id: 'third-party',
+            label: 'Claude and GPT Models',
+            fiveHour: { usedPercent: 50, resetsAt: inAnHour },
+            sevenDay: { usedPercent: 55, resetsAt: inAnHour },
+          },
+        ],
+        fetchedAt: Date.now(),
+        status: 'ok',
+        error: null,
+      } satisfies UsageState,
     },
   };
 });
@@ -30,7 +54,7 @@ const { mockRefreshUsage, usage } = vi.hoisted(() => {
 vi.mock('../store/store', () => ({
   store: { usage },
   refreshUsage: mockRefreshUsage,
-  USAGE_PROVIDERS: ['claude', 'codex'],
+  USAGE_PROVIDERS: ['claude', 'codex', 'antigravity'],
 }));
 
 const disposers: Array<() => void> = [];
@@ -51,14 +75,18 @@ function mount(): HTMLElement {
 const popover = () => document.querySelector<HTMLElement>('[data-testid="usage-popover"]');
 
 describe('UsageStatusBar', () => {
-  it('shows only the five-hour window inline, per logged-in provider', () => {
+  it('shows one headline for Claude and two compact Antigravity group headlines', () => {
     const container = mount();
     const entries = container.querySelectorAll('[role="status"]');
-    expect(entries).toHaveLength(1);
+    expect(entries).toHaveLength(2);
     expect(entries[0].textContent).toContain('Claude');
     expect(entries[0].textContent).toContain('60% left');
     expect(entries[0].textContent).not.toContain('7d');
-    expect(container.querySelectorAll('[role="progressbar"]')).toHaveLength(1);
+    expect(entries[1].textContent).toContain('Antigravity');
+    expect(entries[1].textContent).toContain('G 5h');
+    expect(entries[1].textContent).toContain('3P 5h');
+    expect(entries[1].textContent).not.toContain('Gemini Models');
+    expect(container.querySelectorAll('[role="progressbar"]')).toHaveLength(3);
   });
 
   it('fills the meter with what is left, not what is used', () => {
@@ -70,7 +98,7 @@ describe('UsageStatusBar', () => {
 
   it('opens a popover with both windows and the refresh time on hover', () => {
     const container = mount();
-    const entry = container.querySelector<HTMLElement>('[role="status"]');
+    const entry = container.querySelectorAll<HTMLElement>('[role="status"]')[0];
     if (!entry) throw new Error('no provider entry');
     expect(popover()).toBeNull();
 
@@ -88,7 +116,18 @@ describe('UsageStatusBar', () => {
 
   it('refreshes just the clicked provider', () => {
     const container = mount();
-    container.querySelector<HTMLElement>('[role="status"]')?.click();
-    expect(mockRefreshUsage).toHaveBeenCalledWith('claude', { force: true });
+    container.querySelectorAll<HTMLElement>('[role="status"]')[1]?.click();
+    expect(mockRefreshUsage).toHaveBeenCalledWith('antigravity', { force: true });
+  });
+
+  it('shows full Antigravity group names and both windows in the popover', () => {
+    const container = mount();
+    const entry = container.querySelectorAll<HTMLElement>('[role="status"]')[1];
+    entry.dispatchEvent(new MouseEvent('mouseenter'));
+    const card = popover();
+    expect(card?.textContent).toContain('Gemini Models');
+    expect(card?.textContent).toContain('Claude and GPT Models');
+    expect(card?.textContent).toContain('5h');
+    expect(card?.textContent).toContain('7d');
   });
 });

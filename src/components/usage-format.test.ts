@@ -47,8 +47,7 @@ describe('formatFetchedAt', () => {
 
 describe('usageVisible', () => {
   const idle: UsageState = {
-    fiveHour: null,
-    sevenDay: null,
+    groups: [],
     fetchedAt: null,
     status: 'idle',
     error: null,
@@ -60,7 +59,19 @@ describe('usageVisible', () => {
   });
 
   it('shows a provider with any window, and an error even without one', () => {
-    expect(usageVisible({ ...idle, sevenDay: { usedPercent: 1, resetsAt: null } })).toBe(true);
+    expect(
+      usageVisible({
+        ...idle,
+        groups: [
+          {
+            id: 'default',
+            label: 'Default',
+            fiveHour: null,
+            sevenDay: { usedPercent: 1, resetsAt: null },
+          },
+        ],
+      }),
+    ).toBe(true);
     expect(usageVisible({ ...idle, status: 'error', error: 'HTTP 401' })).toBe(true);
   });
 });

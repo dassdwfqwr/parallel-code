@@ -22,6 +22,7 @@ export type {
   PtyOutput,
   StepEntry,
   UsageProvider,
+  UsageGroup,
   UsageResult,
   UsageWindow,
   VerificationRun,

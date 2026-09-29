@@ -74,7 +74,11 @@ export function parseCodexUsageResponse(body: unknown, now = Date.now()): UsageR
   const fiveHour = parseWindow(raw.primary_window, now);
   const sevenDay = parseWindow(raw.secondary_window, now);
   if (!fiveHour && !sevenDay) return null;
-  return { status: 'ok', fiveHour, sevenDay, fetchedAt: now };
+  return {
+    status: 'ok',
+    groups: [{ id: 'codex', label: 'Codex', fiveHour, sevenDay }],
+    fetchedAt: now,
+  };
 }
 
 async function readAuth(home: string): Promise<CodexAuth | null> {

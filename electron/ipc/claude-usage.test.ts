@@ -24,8 +24,14 @@ describe('parseClaudeUsageResponse', () => {
     );
     expect(result).toEqual({
       status: 'ok',
-      fiveHour: { usedPercent: 23.5, resetsAt: 1_738_425_600_000 },
-      sevenDay: { usedPercent: 100, resetsAt: Date.parse('2025-02-06T16:00:00Z') },
+      groups: [
+        {
+          id: 'claude',
+          label: 'Claude',
+          fiveHour: { usedPercent: 23.5, resetsAt: 1_738_425_600_000 },
+          sevenDay: { usedPercent: 100, resetsAt: Date.parse('2025-02-06T16:00:00Z') },
+        },
+      ],
       fetchedAt: NOW,
     });
   });
@@ -34,8 +40,14 @@ describe('parseClaudeUsageResponse', () => {
     const result = parseClaudeUsageResponse({ five_hour: { utilization: 5 } }, NOW);
     expect(result).toEqual({
       status: 'ok',
-      fiveHour: { usedPercent: 5, resetsAt: null },
-      sevenDay: null,
+      groups: [
+        {
+          id: 'claude',
+          label: 'Claude',
+          fiveHour: { usedPercent: 5, resetsAt: null },
+          sevenDay: null,
+        },
+      ],
       fetchedAt: NOW,
     });
   });
@@ -95,11 +107,10 @@ describe('fetchClaudeUsage', () => {
 
   it('sends the token as a bearer header and returns parsed windows', async () => {
     const fetchMock = stubFetch(200, { five_hour: { utilization: 42, resets_at: 1_738_425_600 } });
-    const result = await fetchClaudeUsage(
-      configDir('{"claudeAiOauth":{"accessToken":"secret-token"}}'),
-    );
+    const credentials = '{"claudeAiOauth":{"accessToken":"secret-token"}}';
+    const result = await fetchClaudeUsage(configDir(credentials), async () => credentials);
     expect(result.status).toBe('ok');
-    if (result.status === 'ok') expect(result.fiveHour?.usedPercent).toBe(42);
+    if (result.status === 'ok') expect(result.groups[0]?.fiveHour?.usedPercent).toBe(42);
     const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
     expect((init.headers as Record<string, string>).Authorization).toBe('Bearer secret-token');
   });

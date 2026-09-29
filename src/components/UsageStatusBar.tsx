@@ -14,7 +14,15 @@ import {
   usageVisible,
 } from './usage-format';
 
-const PROVIDER_LABELS: Record<UsageProvider, string> = { claude: 'Claude', codex: 'Codex' };
+const PROVIDER_LABELS: Record<UsageProvider, string> = {
+  claude: 'Claude',
+  codex: 'Codex',
+  antigravity: 'Antigravity',
+};
+const ANTIGRAVITY_GROUP_LABELS: Record<string, string> = {
+  gemini: 'G',
+  'third-party': '3P',
+};
 const POPOVER_WIDTH = 300;
 
 function UsageMeter(props: { label: string; window: UsageWindow; width?: number }) {
@@ -109,12 +117,22 @@ function UsagePopover(props: {
         >
           {PROVIDER_LABELS[props.provider]} usage
         </div>
-        <Show when={props.usage.fiveHour}>
-          {(w) => <UsageMeter label="5h" window={w()} width={120} />}
-        </Show>
-        <Show when={props.usage.sevenDay}>
-          {(w) => <UsageMeter label="7d" window={w()} width={120} />}
-        </Show>
+        <For each={props.usage.groups}>
+          {(group) => (
+            <div style={{ display: 'flex', 'flex-direction': 'column', gap: '4px' }}>
+              <div style={{ color: theme.fg, 'font-weight': '600' }}>{group.label}</div>
+              <Show when={group.fiveHour}>
+                {(w) => <UsageMeter label="5h" window={w()} width={120} />}
+              </Show>
+              <Show when={group.sevenDay}>
+                {(w) => <UsageMeter label="7d" window={w()} width={120} />}
+              </Show>
+              <Show when={!group.fiveHour && !group.sevenDay}>
+                <span style={{ color: theme.fgSubtle }}>Unavailable</span>
+              </Show>
+            </div>
+          )}
+        </For>
         <div
           style={{
             color: props.usage.status === 'error' ? theme.warning : theme.fgSubtle,
@@ -142,12 +160,16 @@ function ProviderUsage(props: { provider: UsageProvider }) {
   const usage = () => store.usage[props.provider];
   const stale = () => usage().status === 'error' && hasUsageSnapshot(usage());
   const [anchor, setAnchor] = createSignal<{ left: number; bottom: number } | null>(null);
-  // Fall back to the weekly window so a provider without a five-hour one still shows something.
-  const headline = createMemo(() => {
-    const u = usage();
-    if (u.fiveHour) return { label: '5h', window: u.fiveHour };
-    if (u.sevenDay) return { label: '7d', window: u.sevenDay };
-    return null;
+  // Fall back to weekly so a group without a five-hour window still has a headline.
+  const headlines = createMemo(() => {
+    return usage().groups.flatMap((group) => {
+      const window = group.fiveHour ?? group.sevenDay;
+      if (!window) return [];
+      const windowLabel = group.fiveHour ? '5h' : '7d';
+      const groupLabel =
+        props.provider === 'antigravity' ? ANTIGRAVITY_GROUP_LABELS[group.id] : undefined;
+      return [{ label: groupLabel ? `${groupLabel} ${windowLabel}` : windowLabel, window }];
+    });
   });
 
   return (
@@ -174,7 +196,9 @@ function ProviderUsage(props: { provider: UsageProvider }) {
         >
           {PROVIDER_LABELS[props.provider]}
         </span>
-        <Show when={headline()}>{(h) => <UsageMeter label={h().label} window={h().window} />}</Show>
+        <For each={headlines()}>
+          {(headline) => <UsageMeter label={headline.label} window={headline.window} />}
+        </For>
         <Show when={!hasUsageSnapshot(usage())}>
           <span>usage unavailable · {usage().error}</span>
         </Show>
@@ -188,7 +212,7 @@ function ProviderUsage(props: { provider: UsageProvider }) {
 
 /**
  * Bottom bar with the rate-limit windows of every agent subscription the app
- * can read (Claude Code, Codex). Hidden until the first successful read, and
+ * can read (Claude Code, Codex, Antigravity). Hidden until the first successful read, and
  * permanently when no agent has a subscription login (API-key users).
  */
 export function UsageStatusBar() {

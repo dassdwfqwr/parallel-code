@@ -51,7 +51,11 @@ export function parseClaudeUsageResponse(body: unknown, now = Date.now()): Usage
   const fiveHour = parseWindow(raw.five_hour);
   const sevenDay = parseWindow(raw.seven_day);
   if (!fiveHour && !sevenDay) return null;
-  return { status: 'ok', fiveHour, sevenDay, fetchedAt: now };
+  return {
+    status: 'ok',
+    groups: [{ id: 'claude', label: 'Claude', fiveHour, sevenDay }],
+    fetchedAt: now,
+  };
 }
 
 /** Extracts the OAuth access token from a Claude credentials JSON document. */
@@ -115,8 +119,11 @@ async function readCredentialsJson(configDir: string): Promise<string | null> {
   return readCredentialsFile(configDir);
 }
 
-export async function fetchClaudeUsage(configDir = claudeConfigDir()): Promise<UsageResult> {
-  const json = await readCredentialsJson(configDir);
+export async function fetchClaudeUsage(
+  configDir = claudeConfigDir(),
+  readCredentials: (dir: string) => Promise<string | null> = readCredentialsJson,
+): Promise<UsageResult> {
+  const json = await readCredentials(configDir);
   const token = json ? parseAccessToken(json) : null;
   if (!token) return { status: 'unavailable', reason: 'No Claude subscription login found' };
   return requestUsage({

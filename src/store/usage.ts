@@ -9,18 +9,23 @@ const POLL_INTERVAL_MS = 5 * 60_000;
 const MIN_REFRESH_GAP_MS = 30_000;
 
 /** Render order of the providers in the status bar. */
-export const USAGE_PROVIDERS: readonly UsageProvider[] = ['claude', 'codex'];
+export const USAGE_PROVIDERS: readonly UsageProvider[] = ['claude', 'codex', 'antigravity'];
 
 const CHANNELS: Record<UsageProvider, IPC> = {
   claude: IPC.GetClaudeUsage,
   codex: IPC.GetCodexUsage,
+  antigravity: IPC.GetAntigravityUsage,
 };
 
-// Only the bundled Claude Code and Codex agents log in with a subscription the app can read.
-const AGENT_PROVIDERS: Record<string, UsageProvider> = { 'claude-code': 'claude', codex: 'codex' };
+// Only bundled agents with a safe, read-only usage source are mapped here.
+const AGENT_PROVIDERS: Record<string, UsageProvider> = {
+  'claude-code': 'claude',
+  codex: 'codex',
+  antigravity: 'antigravity',
+};
 
 let pollTimer: ReturnType<typeof setInterval> | null = null;
-const lastRequestAt: Record<UsageProvider, number> = { claude: 0, codex: 0 };
+const lastRequestAt: Record<UsageProvider, number> = { claude: 0, codex: 0, antigravity: 0 };
 const inFlight: Partial<Record<UsageProvider, Promise<void>>> = {};
 
 /** The usage meter an agent's sessions move, if the app tracks one for it. */
@@ -31,8 +36,7 @@ export function usageProviderForAgent(agentDefId: string): UsageProvider | null 
 function applyResult(provider: UsageProvider, result: UsageResult): void {
   if (result.status === 'ok') {
     setStore('usage', provider, {
-      fiveHour: result.fiveHour,
-      sevenDay: result.sevenDay,
+      groups: result.groups,
       fetchedAt: result.fetchedAt,
       status: 'ok',
       error: null,
@@ -40,8 +44,7 @@ function applyResult(provider: UsageProvider, result: UsageResult): void {
   } else if (result.status === 'unavailable') {
     // Full reset: setStore merges, and a surviving snapshot would keep the bar visible after logout.
     setStore('usage', provider, {
-      fiveHour: null,
-      sevenDay: null,
+      groups: [],
       fetchedAt: null,
       status: 'unavailable',
       error: result.reason,

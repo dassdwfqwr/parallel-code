@@ -142,6 +142,7 @@ import { listCodexModels } from './codex-models.js';
 import { getSystemMonospaceFonts } from './system-fonts.js';
 import { fetchClaudeUsage } from './claude-usage.js';
 import { fetchCodexUsage } from './codex-usage.js';
+import { fetchAntigravityUsage } from './antigravity-usage.js';
 import path from 'path';
 import {
   assertString,
@@ -2214,6 +2215,7 @@ export function registerAllHandlers(win: BrowserWindow): void {
 
   ipcMain.handle(IPC.GetClaudeUsage, () => fetchClaudeUsage());
   ipcMain.handle(IPC.GetCodexUsage, () => fetchCodexUsage());
+  ipcMain.handle(IPC.GetAntigravityUsage, () => fetchAntigravityUsage());
 
   // --- Forward window events to renderer ---
   win.on('focus', () => {

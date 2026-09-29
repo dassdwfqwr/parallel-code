@@ -30,7 +30,7 @@ export function formatFetchedAt(fetchedAt: number, now = Date.now()): string {
 }
 
 export function hasUsageSnapshot(state: UsageState): boolean {
-  return state.fiveHour !== null || state.sevenDay !== null;
+  return state.groups.some((group) => group.fiveHour !== null || group.sevenDay !== null);
 }
 
 /** A provider shows once it has a snapshot, and stays up through refresh errors

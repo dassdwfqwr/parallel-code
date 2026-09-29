@@ -9,8 +9,7 @@ const core = vi.hoisted(() => ({
 }));
 
 const IDLE: UsageState = {
-  fiveHour: null,
-  sevenDay: null,
+  groups: [],
   fetchedAt: null,
   status: 'idle',
   error: null,
@@ -18,20 +17,36 @@ const IDLE: UsageState = {
 
 vi.mock('./core', async () => {
   const { createMockStoreHarness } = await import('./test-helpers');
-  core.harness = createMockStoreHarness({ usage: { claude: { ...IDLE }, codex: { ...IDLE } } });
+  core.harness = createMockStoreHarness({
+    usage: {
+      claude: { ...IDLE },
+      codex: { ...IDLE },
+      antigravity: { ...IDLE },
+    },
+  });
   return core.harness.moduleMock();
 });
 vi.mock('../lib/ipc', () => ({ invoke: mockInvoke }));
 vi.mock('../../electron/ipc/channels', () => ({
-  IPC: { GetClaudeUsage: 'get_claude_usage', GetCodexUsage: 'get_codex_usage' },
+  IPC: {
+    GetClaudeUsage: 'get_claude_usage',
+    GetCodexUsage: 'get_codex_usage',
+    GetAntigravityUsage: 'get_antigravity_usage',
+  },
 }));
 
 type Slice = typeof import('./usage');
 
 const OK: UsageResult = {
   status: 'ok',
-  fiveHour: { usedPercent: 40, resetsAt: 1_000 },
-  sevenDay: { usedPercent: 10, resetsAt: 2_000 },
+  groups: [
+    {
+      id: 'default',
+      label: 'Default',
+      fiveHour: { usedPercent: 40, resetsAt: 1_000 },
+      sevenDay: { usedPercent: 10, resetsAt: 2_000 },
+    },
+  ],
   fetchedAt: 500,
 };
 
@@ -47,6 +62,13 @@ describe('usage store slice', () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date('2026-09-02T12:00:00Z'));
     mockInvoke.mockReset();
+    core.harness?.reset({
+      usage: {
+        claude: { ...IDLE },
+        codex: { ...IDLE },
+        antigravity: { ...IDLE },
+      },
+    });
     // The slice keeps its throttles and timer in module scope, so every test gets a fresh copy.
     vi.resetModules();
     slice = await import('./usage');
@@ -62,13 +84,21 @@ describe('usage store slice', () => {
     await slice.refreshUsage('codex');
     expect(mockInvoke).toHaveBeenCalledWith('get_codex_usage');
     expect(state('codex')).toEqual({
-      fiveHour: OK.fiveHour,
-      sevenDay: OK.sevenDay,
+      groups: OK.groups,
       fetchedAt: 500,
       status: 'ok',
       error: null,
     });
     expect(state('claude')).toEqual(IDLE);
+  });
+
+  it('reads Antigravity through its own IPC channel', async () => {
+    mockInvoke.mockResolvedValueOnce(OK);
+    await slice.refreshUsage('antigravity');
+    expect(mockInvoke).toHaveBeenCalledWith('get_antigravity_usage');
+    expect(state('antigravity')).toMatchObject({ groups: OK.groups, status: 'ok' });
+    expect(state('claude')).toEqual(IDLE);
+    expect(state('codex')).toEqual(IDLE);
   });
 
   it('drops the snapshot entirely when the login goes away', async () => {
@@ -77,8 +107,7 @@ describe('usage store slice', () => {
     mockInvoke.mockResolvedValueOnce({ status: 'unavailable', reason: 'logged out' });
     await slice.refreshUsage('claude', { force: true });
     expect(state()).toEqual({
-      fiveHour: null,
-      sevenDay: null,
+      groups: [],
       fetchedAt: null,
       status: 'unavailable',
       error: 'logged out',
@@ -90,7 +119,7 @@ describe('usage store slice', () => {
     await slice.refreshUsage('claude');
     mockInvoke.mockResolvedValueOnce({ status: 'error', message: 'HTTP 429' });
     await slice.refreshUsage('claude', { force: true });
-    expect(state()).toMatchObject({ fiveHour: OK.fiveHour, status: 'error', error: 'HTTP 429' });
+    expect(state()).toMatchObject({ groups: OK.groups, status: 'error', error: 'HTTP 429' });
   });
 
   it('turns a rejected IPC call into an error state', async () => {
@@ -129,17 +158,19 @@ describe('usage store slice', () => {
     expect(mockInvoke.mock.calls.map(([channel]) => channel)).toEqual([
       'get_claude_usage',
       'get_codex_usage',
+      'get_antigravity_usage',
     ]);
     await vi.advanceTimersByTimeAsync(5 * 60_000);
-    expect(mockInvoke).toHaveBeenCalledTimes(4);
+    expect(mockInvoke).toHaveBeenCalledTimes(6);
     slice.stopUsagePolling();
     await vi.advanceTimersByTimeAsync(10 * 60_000);
-    expect(mockInvoke).toHaveBeenCalledTimes(4);
+    expect(mockInvoke).toHaveBeenCalledTimes(6);
   });
 
   it('maps the bundled Claude Code and Codex agents to their meters', () => {
     expect(slice.usageProviderForAgent('claude-code')).toBe('claude');
     expect(slice.usageProviderForAgent('codex')).toBe('codex');
+    expect(slice.usageProviderForAgent('antigravity')).toBe('antigravity');
     expect(slice.usageProviderForAgent('gemini')).toBeNull();
   });
 });
