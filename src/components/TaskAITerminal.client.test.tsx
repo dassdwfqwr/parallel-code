@@ -78,6 +78,7 @@ beforeEach(() => {
       generation: 0,
     },
   });
+  setStore('availableAgents', []);
   host = document.createElement('div');
   document.body.append(host);
 });
@@ -126,6 +127,122 @@ function clickTerminal() {
   host.querySelector<HTMLButtonElement>('[aria-label="Show main agent terminal"]')?.click();
   confirmSwitch();
 }
+
+it('restarts an idle terminal agent with the model and reasoning selected in its header', async () => {
+  mocks.invoke.mockImplementation(async (channel) => {
+    if (channel === IPC.ListAgentModels) {
+      return [
+        {
+          slug: 'gpt-6-sol',
+          displayName: 'GPT-6-Sol',
+          defaultReasoningEffort: 'medium',
+          supportedReasoningEfforts: [{ reasoningEffort: 'medium' }, { reasoningEffort: 'xhigh' }],
+        },
+      ];
+    }
+    return undefined;
+  });
+  mount();
+
+  host
+    .querySelector<HTMLButtonElement>(
+      'button[title="Choose the selected agent\'s model and reasoning strength"]',
+    )
+    ?.click();
+  await vi.waitFor(() =>
+    expect(
+      host.querySelector<HTMLSelectElement>('select[aria-label="Agent model"]'),
+    ).not.toBeNull(),
+  );
+  const model = host.querySelector<HTMLSelectElement>('select[aria-label="Agent model"]');
+  const effort = host.querySelector<HTMLSelectElement>(
+    'select[aria-label="Agent reasoning effort"]',
+  );
+  if (!model || !effort) throw new Error('Missing model controls');
+  model.value = 'gpt-6-sol';
+  model.dispatchEvent(new Event('change', { bubbles: true }));
+  effort.value = 'xhigh';
+  effort.dispatchEvent(new Event('change', { bubbles: true }));
+  const apply = [...host.querySelectorAll<HTMLButtonElement>('button')].find(
+    (button) => button.textContent === 'Apply',
+  );
+  expect(apply?.disabled).toBe(false);
+  apply?.click();
+
+  await vi.waitFor(() => expect(store.agents.agent.generation).toBe(1));
+  expect(mocks.invoke).toHaveBeenCalledWith(IPC.KillAgent, { agentId: 'agent' });
+  expect(store.agents.agent.def.args).toEqual([
+    '--model',
+    'gpt-6-sol',
+    '-c',
+    'model_reasoning_effort="xhigh"',
+  ]);
+  expect(store.agents.agent.resumed).toBe(false);
+});
+
+it('configures model and reasoning before adding another supported CLI agent', async () => {
+  setStore('availableAgents', [
+    {
+      id: 'claude-code',
+      name: 'Claude Code',
+      command: 'claude',
+      args: [],
+      resume_args: ['--continue'],
+      skip_permissions_args: [],
+      description: 'Claude terminal',
+    },
+  ]);
+  mocks.invoke.mockImplementation(async (channel) => {
+    if (channel === IPC.ListAgentModels) {
+      return [
+        {
+          slug: 'opus',
+          displayName: 'Opus (latest)',
+          defaultReasoningEffort: 'high',
+          supportedReasoningEfforts: [{ reasoningEffort: 'high' }, { reasoningEffort: 'max' }],
+        },
+      ];
+    }
+    return undefined;
+  });
+  mount();
+  host.querySelector<HTMLButtonElement>('button[title="Add AI agent"]')?.click();
+  const claude = [...host.querySelectorAll<HTMLButtonElement>('button')].find(
+    (button) => button.textContent?.trim() === 'Claude Code',
+  );
+  expect(claude).toBeDefined();
+  claude?.click();
+
+  await vi.waitFor(() =>
+    expect(
+      host.querySelector<HTMLSelectElement>('select[aria-label="Agent model"]'),
+    ).not.toBeNull(),
+  );
+  const model = host.querySelector<HTMLSelectElement>('select[aria-label="Agent model"]');
+  const effort = host.querySelector<HTMLSelectElement>(
+    'select[aria-label="Agent reasoning effort"]',
+  );
+  if (!model || !effort) throw new Error('Missing add-agent model controls');
+  model.value = 'opus';
+  model.dispatchEvent(new Event('change', { bubbles: true }));
+  effort.value = 'max';
+  effort.dispatchEvent(new Event('change', { bubbles: true }));
+  const add = [...host.querySelectorAll<HTMLButtonElement>('button')].find(
+    (button) => button.textContent === 'Add agent',
+  );
+  add?.click();
+
+  await vi.waitFor(() => expect(store.tasks.task.agentIds).toHaveLength(2));
+  const addedId = store.tasks.task.agentIds[1];
+  expect(store.agents[addedId].def.args).toEqual(['--model', 'opus', '--effort', 'max']);
+  expect(store.agents[addedId].def.resume_args).toEqual([
+    '--model',
+    'opus',
+    '--effort',
+    'max',
+    '--continue',
+  ]);
+});
 
 it('keeps the remaining agent in its own terminal when the main chat agent is closed', async () => {
   setStore('agents', 'second', { ...store.agents.agent, id: 'second' });

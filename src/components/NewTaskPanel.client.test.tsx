@@ -17,6 +17,15 @@ beforeEach(() => {
     if (channel === IPC.GetMainBranch) return 'main';
     if (channel === IPC.GetGitignoredDirs) return [];
     if (channel === IPC.CheckDockerAvailable) return false;
+    if (channel === IPC.ListAgentModels)
+      return [
+        {
+          slug: 'sonnet',
+          displayName: 'Sonnet (latest)',
+          defaultReasoningEffort: 'high',
+          supportedReasoningEfforts: [{ reasoningEffort: 'high' }, { reasoningEffort: 'xhigh' }],
+        },
+      ];
     return undefined;
   });
   setStore('tasks', reconcile({}));
@@ -87,6 +96,38 @@ it('dims only the form, keeps status clear, and restores editing after creation 
   expect(host.textContent).toContain('Worktree creation failed');
   expect(submit?.disabled).toBe(false);
   expect(store.showNewTaskPanel).toBe(true);
+});
+
+it('stores the chosen model and reasoning strength on the task-local agent', async () => {
+  const model = host.querySelector<HTMLSelectElement>('select[aria-label="Agent model"]');
+  const effort = host.querySelector<HTMLSelectElement>(
+    'select[aria-label="Agent reasoning effort"]',
+  );
+  await vi.waitFor(() => expect(model?.querySelector('option[value="sonnet"]')).not.toBeNull());
+  if (!model || !effort) throw new Error('Missing model controls');
+  model.value = 'sonnet';
+  model.dispatchEvent(new Event('change', { bubbles: true }));
+  effort.value = 'xhigh';
+  effort.dispatchEvent(new Event('change', { bubbles: true }));
+
+  const originalInvoke = vi.mocked(invoke).getMockImplementation();
+  vi.mocked(invoke).mockImplementation((channel, args) => {
+    if (channel === IPC.CreateTask)
+      return Promise.resolve({
+        id: 'model-task',
+        branch_name: 'task/model-task',
+        worktree_path: '/project/model-task',
+      });
+    return Promise.resolve(originalInvoke?.(channel, args));
+  });
+  host
+    .querySelector('form')
+    ?.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+
+  await vi.waitFor(() => expect(store.tasks['model-task']).toBeDefined());
+  const agentId = store.tasks['model-task'].agentIds[0];
+  expect(store.agents[agentId].def.args).toEqual(['--model', 'sonnet', '--effort', 'xhigh']);
+  expect(store.agents[agentId].def.resume_args).toEqual(['--model', 'sonnet', '--effort', 'xhigh']);
 });
 
 it('creates a linked task from the editable canvas assignment with the source branch and selected agent', async () => {

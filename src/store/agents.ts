@@ -10,6 +10,8 @@ import { refreshUsage, usageProviderForAgent } from './usage';
 import { assignFreshSessionId } from './session-ids';
 import { widenTaskColumnForAgentPanes } from './task-column';
 import { forgetAgentPrompts } from '../lib/prompt-history';
+import type { AgentModelSelection } from '../../electron/shared/agent-models';
+import { withAgentModelSelection } from '../../electron/shared/agent-models';
 
 export async function loadAgents(): Promise<void> {
   const defaults = await invoke<AgentDef[]>(IPC.ListAgents);
@@ -153,6 +155,18 @@ export function restartAgent(agentId: string, useResumeArgs: boolean): void {
     }),
   );
   markAgentSpawned(agentId);
+}
+
+/** Persist the launch choice on this task-local AgentDef; shared defaults stay untouched. */
+export function configureAgentModel(agentId: string, selection: AgentModelSelection): void {
+  setStore(
+    produce((s) => {
+      const agent = s.agents[agentId];
+      if (!agent) return;
+      agent.def = withAgentModelSelection(agent.def, selection);
+    }),
+  );
+  void saveState();
 }
 
 export function switchAgent(agentId: string, newDef: AgentDef): void {

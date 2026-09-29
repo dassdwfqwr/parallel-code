@@ -24,6 +24,7 @@ export {
   closeAgentInTask,
   markAgentExited,
   restartAgent,
+  configureAgentModel,
   switchAgent,
   addCustomAgent,
   removeCustomAgent,

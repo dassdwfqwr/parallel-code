@@ -5,6 +5,7 @@ import {
   store,
   markAgentExited,
   restartAgent,
+  configureAgentModel,
   switchAgent,
   setLastPrompt,
   markAgentOutput,
@@ -48,6 +49,13 @@ import type { AgentDef } from '../ipc/types';
 import type { PromptInputHandle } from './PromptInput';
 import { buildTaskAgentArgs, isResumeArgsFailure } from '../lib/agent-args';
 import { resolveAITerminalLayout } from '../lib/ai-terminal-layout';
+import { AgentModelFields } from './AgentModelFields';
+import type { AgentModelSelection } from '../../electron/shared/agent-models';
+import {
+  modelProviderForAgent,
+  readAgentModelSelection,
+  withAgentModelSelection,
+} from '../../electron/shared/agent-models';
 
 type StepNavApi = TranscriptMarks;
 
@@ -426,6 +434,18 @@ export function TaskAITerminal(props: TaskAITerminalProps) {
                   }}
                 </For>
               </div>
+              <Show
+                when={(() => {
+                  const agent = selectedAgent();
+                  return agent &&
+                    !isAgentChat(props.task, agent.id) &&
+                    modelProviderForAgent(agent.def)
+                    ? agent
+                    : undefined;
+                })()}
+              >
+                {(agent) => <AgentModelMenu task={props.task} agentId={agent().id} />}
+              </Show>
               <Show when={multipleAgents()}>
                 <button
                   type="button"
@@ -598,9 +618,198 @@ export function TaskAITerminal(props: TaskAITerminalProps) {
   );
 }
 
+function sameModelSelection(a: AgentModelSelection, b: AgentModelSelection): boolean {
+  return a.model === b.model && a.reasoningEffort === b.reasoningEffort;
+}
+
+function AgentModelMenu(props: { task: Task; agentId: string }) {
+  const [open, setOpen] = createSignal(false);
+  const [draft, setDraft] = createSignal<AgentModelSelection>({});
+  const [confirming, setConfirming] = createSignal(false);
+  const [applying, setApplying] = createSignal(false);
+  const [error, setError] = createSignal('');
+  let menuRef: HTMLSpanElement | undefined;
+
+  const agent = () => store.agents[props.agentId];
+  const current = () => (agent() ? readAgentModelSelection(agent().def) : {});
+  const prompted = () => props.task.promptedAgentIds?.includes(props.agentId) === true;
+  const busy = () => agent()?.status === 'running' && !isAgentSettled(props.agentId);
+  const label = () => {
+    const selection = current();
+    if (!selection.model && !selection.reasoningEffort) return 'CLI default';
+    return [selection.model ?? 'Default model', selection.reasoningEffort]
+      .filter(Boolean)
+      .join(' · ');
+  };
+
+  const handleClickOutside = (event: MouseEvent) => {
+    if (menuRef && !menuRef.contains(event.target as Node)) setOpen(false);
+  };
+  onMount(() => document.addEventListener('mousedown', handleClickOutside));
+  onCleanup(() => document.removeEventListener('mousedown', handleClickOutside));
+
+  function requestApply() {
+    if (sameModelSelection(current(), draft())) {
+      setOpen(false);
+      return;
+    }
+    if (prompted()) {
+      setConfirming(true);
+      return;
+    }
+    void apply(false);
+  }
+
+  async function apply(resume: boolean) {
+    const target = agent();
+    if (!target || applying()) return;
+    setApplying(true);
+    setError('');
+    try {
+      if (target.status === 'running') {
+        await invoke(IPC.KillAgent, { agentId: props.agentId });
+      }
+      configureAgentModel(props.agentId, draft());
+      restartAgent(props.agentId, resume);
+      setConfirming(false);
+      setOpen(false);
+    } catch (caught) {
+      setError(errMessage(caught));
+      setConfirming(false);
+    } finally {
+      setApplying(false);
+    }
+  }
+
+  return (
+    <>
+      <span
+        ref={(element) => (menuRef = element)}
+        style={{ position: 'relative', display: 'inline-flex' }}
+      >
+        <button
+          type="button"
+          title="Choose the selected agent's model and reasoning strength"
+          onClick={(event) => {
+            event.stopPropagation();
+            const next = !open();
+            setOpen(next);
+            setError('');
+            if (next) setDraft(current());
+          }}
+          style={{
+            display: 'inline-flex',
+            'align-items': 'center',
+            height: '20px',
+            'max-width': '210px',
+            overflow: 'hidden',
+            'text-overflow': 'ellipsis',
+            'white-space': 'nowrap',
+            background: theme.bgInput,
+            border: `1px solid ${theme.border}`,
+            color: theme.fgMuted,
+            'border-radius': 'var(--radius-sm)',
+            padding: '0 7px',
+            cursor: 'pointer',
+            'font-size': sf(10),
+            'font-family': "'JetBrains Mono', monospace",
+          }}
+        >
+          {label()}
+        </button>
+        <Show when={open() && agent()}>
+          <div
+            style={{
+              position: 'absolute',
+              top: '100%',
+              right: '0',
+              'margin-top': '4px',
+              width: '370px',
+              background: theme.bgElevated,
+              border: `1px solid ${theme.border}`,
+              'border-radius': 'var(--radius-sm)',
+              padding: '10px',
+              'z-index': '35',
+              'box-shadow': '0 4px 12px rgba(0,0,0,0.3)',
+              display: 'flex',
+              'flex-direction': 'column',
+              gap: '10px',
+            }}
+          >
+            <div style={{ color: theme.fg, 'font-size': sf(11), 'font-weight': '600' }}>
+              {agent()?.def.name} model
+            </div>
+            <AgentModelFields agentDef={agent()?.def} selection={draft()} onChange={setDraft} />
+            <Show when={busy()}>
+              <div style={{ color: theme.warning, 'font-size': sf(10) }}>
+                Wait for the current response to finish before switching.
+              </div>
+            </Show>
+            <Show when={error()}>
+              <div style={{ color: theme.error, 'font-size': sf(10) }}>{error()}</div>
+            </Show>
+            <div style={{ display: 'flex', 'justify-content': 'flex-end', gap: '6px' }}>
+              <button
+                type="button"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  setOpen(false);
+                }}
+                style={{
+                  background: theme.bgInput,
+                  border: `1px solid ${theme.border}`,
+                  color: theme.fg,
+                  'border-radius': 'var(--radius-sm)',
+                  padding: '5px 9px',
+                  cursor: 'pointer',
+                  'font-size': sf(10),
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={busy() || applying() || sameModelSelection(current(), draft())}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  requestApply();
+                }}
+                style={{
+                  background: theme.accent,
+                  border: 'none',
+                  color: theme.accentText,
+                  'border-radius': 'var(--radius-sm)',
+                  padding: '5px 9px',
+                  cursor: busy() || applying() ? 'not-allowed' : 'pointer',
+                  opacity: busy() || sameModelSelection(current(), draft()) ? '0.55' : '1',
+                  'font-size': sf(10),
+                }}
+              >
+                {applying() ? 'Applying…' : prompted() ? 'Apply & resume' : 'Apply'}
+              </button>
+            </div>
+          </div>
+        </Show>
+      </span>
+      <ConfirmDialog
+        open={confirming()}
+        title="Restart this agent with the selected model?"
+        message="The terminal process will restart and resume this conversation with the new model and reasoning strength. Wait for any active response to finish first."
+        confirmLabel="Restart and resume"
+        confirmDisabled={busy() || applying()}
+        confirmLoading={applying()}
+        onConfirm={() => void apply(true)}
+        onCancel={() => setConfirming(false)}
+      />
+    </>
+  );
+}
+
 function AddAgentMenu(props: { taskId: string }) {
   const [open, setOpen] = createSignal(false);
   const [addingAgentId, setAddingAgentId] = createSignal<string | null>(null);
+  const [configuringAgent, setConfiguringAgent] = createSignal<AgentDef | null>(null);
+  const [modelSelection, setModelSelection] = createSignal<AgentModelSelection>({});
   let menuRef: HTMLSpanElement | undefined;
 
   const availableAgents = () => store.availableAgents.filter((agent) => agent.available !== false);
@@ -612,17 +821,21 @@ function AddAgentMenu(props: { taskId: string }) {
   onMount(() => document.addEventListener('mousedown', handleClickOutside));
   onCleanup(() => document.removeEventListener('mousedown', handleClickOutside));
 
-  async function addAgent(agentDef: AgentDef) {
+  async function addAgent(agentDef: AgentDef, selection: AgentModelSelection = {}) {
     if (addingAgentId()) return;
     setAddingAgentId(agentDef.id);
     try {
-      const agentId = await addAgentToTask(props.taskId, agentDef);
+      const agentId = await addAgentToTask(
+        props.taskId,
+        withAgentModelSelection(agentDef, selection),
+      );
       if (agentId) {
         setActiveTask(props.taskId);
         setActiveAgent(agentId);
         setTaskFocusedPanel(props.taskId, aiTerminalPanelId(agentId));
       }
       setOpen(false);
+      setConfiguringAgent(null);
     } catch (err) {
       console.error('Failed to add agent:', err);
     } finally {
@@ -669,46 +882,116 @@ function AddAgentMenu(props: { taskId: string }) {
             'border-radius': 'var(--radius-sm)',
             padding: '4px 0',
             'z-index': '30',
-            'min-width': '180px',
+            'min-width': configuringAgent() ? '360px' : '180px',
             'box-shadow': '0 4px 12px rgba(0,0,0,0.3)',
           }}
         >
-          <div style={{ padding: '4px 10px', 'font-size': sf(11), color: theme.fgMuted }}>
-            Add agent
-          </div>
-          <For each={availableAgents()}>
-            {(agentDef) => (
-              <button
-                type="button"
-                title={agentDef.description}
-                disabled={addingAgentId() !== null}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  void addAgent(agentDef);
-                }}
+          <Show
+            when={configuringAgent()}
+            fallback={
+              <>
+                <div style={{ padding: '4px 10px', 'font-size': sf(11), color: theme.fgMuted }}>
+                  Add agent
+                </div>
+                <For each={availableAgents()}>
+                  {(agentDef) => (
+                    <button
+                      type="button"
+                      title={agentDef.description}
+                      disabled={addingAgentId() !== null}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (modelProviderForAgent(agentDef)) {
+                          setConfiguringAgent(agentDef);
+                          setModelSelection(readAgentModelSelection(agentDef));
+                        } else {
+                          void addAgent(agentDef);
+                        }
+                      }}
+                      style={{
+                        display: 'block',
+                        width: '100%',
+                        background:
+                          addingAgentId() === agentDef.id ? theme.bgSelected : 'transparent',
+                        border: 'none',
+                        color: theme.fg,
+                        padding: '5px 10px',
+                        cursor: addingAgentId() === null ? 'pointer' : 'default',
+                        'font-size': sf(11),
+                        'text-align': 'left',
+                      }}
+                      onMouseEnter={(e) => {
+                        if (addingAgentId() === null)
+                          e.currentTarget.style.background = theme.bgHover;
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.background =
+                          addingAgentId() === agentDef.id ? theme.bgSelected : 'transparent';
+                      }}
+                    >
+                      {agentDef.name}
+                    </button>
+                  )}
+                </For>
+              </>
+            }
+          >
+            {(agent) => (
+              <div
                 style={{
-                  display: 'block',
-                  width: '100%',
-                  background: addingAgentId() === agentDef.id ? theme.bgSelected : 'transparent',
-                  border: 'none',
-                  color: theme.fg,
-                  padding: '5px 10px',
-                  cursor: addingAgentId() === null ? 'pointer' : 'default',
-                  'font-size': sf(11),
-                  'text-align': 'left',
-                }}
-                onMouseEnter={(e) => {
-                  if (addingAgentId() === null) e.currentTarget.style.background = theme.bgHover;
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.background =
-                    addingAgentId() === agentDef.id ? theme.bgSelected : 'transparent';
+                  padding: '8px 10px',
+                  display: 'flex',
+                  'flex-direction': 'column',
+                  gap: '10px',
                 }}
               >
-                {agentDef.name}
-              </button>
+                <div style={{ display: 'flex', 'align-items': 'center', gap: '8px' }}>
+                  <button
+                    type="button"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      setConfiguringAgent(null);
+                    }}
+                    style={{
+                      background: 'transparent',
+                      border: 'none',
+                      color: theme.fgMuted,
+                      cursor: 'pointer',
+                      padding: '0',
+                    }}
+                  >
+                    ←
+                  </button>
+                  <strong style={{ color: theme.fg, 'font-size': sf(12) }}>{agent().name}</strong>
+                </div>
+                <AgentModelFields
+                  agentDef={agent()}
+                  selection={modelSelection()}
+                  onChange={setModelSelection}
+                />
+                <button
+                  type="button"
+                  disabled={addingAgentId() !== null}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    void addAgent(agent(), modelSelection());
+                  }}
+                  style={{
+                    'align-self': 'flex-end',
+                    background: theme.accent,
+                    border: 'none',
+                    color: theme.accentText,
+                    'border-radius': 'var(--radius-sm)',
+                    padding: '6px 12px',
+                    cursor: addingAgentId() === null ? 'pointer' : 'default',
+                    'font-size': sf(11),
+                  }}
+                >
+                  {addingAgentId() ? 'Adding…' : 'Add agent'}
+                </button>
+              </div>
             )}
-          </For>
+          </Show>
         </div>
       </Show>
     </span>

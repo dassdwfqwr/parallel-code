@@ -111,6 +111,7 @@
   "CancelAskAboutCode": "cancel_ask_about_code",
   "SetMinimaxApiKey": "set_minimax_api_key",
   "ListCodexModels": "list_codex_models",
+  "ListAgentModels": "list_agent_models",
   "CheckDockerAvailable": "check_docker_available",
   "CheckDockerImageExists": "check_docker_image_exists",
   "BuildDockerImage": "build_docker_image",

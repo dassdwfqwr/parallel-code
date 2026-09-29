@@ -17,6 +17,8 @@ export const CODEX_MODEL_PATTERN = /^[a-z0-9][a-z0-9.-]{0,63}$/;
 export interface CodexModelChoice {
   slug: string;
   displayName: string;
+  defaultReasoningEffort?: string;
+  supportedReasoningEfforts?: { reasoningEffort: string; description?: string }[];
 }
 
 /** Guards a model before it becomes a `--model` or `-m` argument to a CLI. */

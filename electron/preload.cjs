@@ -118,6 +118,7 @@ const ALLOWED_CHANNELS = new Set([
   'cancel_ask_about_code',
   'set_minimax_api_key',
   'list_codex_models',
+  'list_agent_models',
   'check_docker_available',
   'check_docker_image_exists',
   'build_docker_image',

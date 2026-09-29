@@ -24,9 +24,33 @@ function toChoice(entry: unknown): CodexModelChoice[] {
   const slug = model.slug;
   if (typeof slug !== 'string' || !CODEX_MODEL_PATTERN.test(slug)) return [];
   const displayName = model.display_name;
+  const defaultReasoningEffort = model.default_reasoning_level;
+  const supported = Array.isArray(model.supported_reasoning_levels)
+    ? model.supported_reasoning_levels.flatMap(
+        (entry): NonNullable<CodexModelChoice['supportedReasoningEfforts']> => {
+          if (typeof entry !== 'object' || entry === null) return [];
+          const effort = (entry as Record<string, unknown>).effort;
+          const description = (entry as Record<string, unknown>).description;
+          if (typeof effort !== 'string' || !/^[a-z][a-z0-9_-]{0,31}$/.test(effort)) return [];
+          return [
+            {
+              reasoningEffort: effort,
+              ...(typeof description === 'string' && description ? { description } : {}),
+            },
+          ];
+        },
+      )
+    : [];
   // A missing or malformed name must not lose the model; the slug reads fine.
   return [
-    { slug, displayName: typeof displayName === 'string' && displayName ? displayName : slug },
+    {
+      slug,
+      displayName: typeof displayName === 'string' && displayName ? displayName : slug,
+      ...(typeof defaultReasoningEffort === 'string' && defaultReasoningEffort
+        ? { defaultReasoningEffort }
+        : {}),
+      ...(supported.length > 0 ? { supportedReasoningEfforts: supported } : {}),
+    },
   ];
 }
 

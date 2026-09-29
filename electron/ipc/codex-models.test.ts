@@ -45,6 +45,36 @@ describe('listCodexModels', () => {
     ]);
   });
 
+  it('includes the supported reasoning choices advertised by Codex', () => {
+    writeCache({
+      models: [
+        {
+          slug: 'gpt-6-sol',
+          display_name: 'GPT-6-Sol',
+          visibility: 'list',
+          default_reasoning_level: 'medium',
+          supported_reasoning_levels: [
+            { effort: 'low', description: 'Fast' },
+            { effort: 'xhigh', description: 'Deep' },
+            { effort: '--bad', description: 'Invalid' },
+          ],
+        },
+      ],
+    });
+
+    expect(listCodexModels()).toEqual([
+      {
+        slug: 'gpt-6-sol',
+        displayName: 'GPT-6-Sol',
+        defaultReasoningEffort: 'medium',
+        supportedReasoningEfforts: [
+          { reasoningEffort: 'low', description: 'Fast' },
+          { reasoningEffort: 'xhigh', description: 'Deep' },
+        ],
+      },
+    ]);
+  });
+
   it('drops entries whose slug could not be a CLI argument and names the rest by slug', () => {
     writeCache({
       models: [

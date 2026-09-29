@@ -4,6 +4,7 @@ import fs from 'fs';
 import os from 'os';
 import { fileURLToPath } from 'url';
 import { IPC } from './channels.js';
+import { listAgentModels } from './agent-models.js';
 import { getAgentActivitySnapshot } from '../agent-hooks/observations.js';
 import {
   startAgentChat,
@@ -1339,6 +1340,14 @@ export function registerAllHandlers(win: BrowserWindow): void {
   });
 
   ipcMain.handle(IPC.ListCodexModels, () => listCodexModels());
+
+  ipcMain.handle(IPC.ListAgentModels, (_e, args) => {
+    assertString(args.provider, 'provider');
+    if (!['codex', 'claude', 'antigravity'].includes(args.provider)) {
+      throw new Error('Agent does not expose selectable models');
+    }
+    return listAgentModels(args.provider);
+  });
 
   registerDocumentHandlers(win);
   registerSuperProductivityHandlers();
