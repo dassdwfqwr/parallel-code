@@ -315,6 +315,25 @@ export function TaskPanel(props: TaskPanelProps) {
     () => !props.task.notes?.trim() && (isGitUnavailable() || changedFileCount() === 0),
   );
 
+  // A task with changes but no other supporting material needs only the compact
+  // review entry. Keep the file inventory mounted so its poller can update the
+  // count, but do not let that entry alone claim a wide focus-mode column.
+  const onlyCompactReview = createMemo(
+    () =>
+      !isGitUnavailable() &&
+      changedFileCount() > 0 &&
+      !props.task.notes?.trim() &&
+      !(store.showPlans && props.task.planContent) &&
+      !props.task.agentTour &&
+      !props.task.stepsEnabled &&
+      props.task.shellAgentIds.length === 0 &&
+      commitList().length === 0 &&
+      selectedCommit() === null &&
+      !tour.loading() &&
+      !tour.error() &&
+      tour.stops().length === 0,
+  );
+
   const [emptySupportExpanded, setEmptySupportExpanded] = createSignal(false);
   // Hide only genuinely empty support panels. Plans, tours, commit navigation,
   // steps and shells are useful content even when the file/notes counts are zero.
@@ -351,7 +370,7 @@ export function TaskPanel(props: TaskPanelProps) {
   const [panelWidth, setPanelWidth] = createSignal(0);
   const [useSplit, setUseSplit] = createSignal(false);
   createEffect(() => {
-    const canSplit = store.focusMode && !supportCollapsed();
+    const canSplit = store.focusMode && !supportCollapsed() && !onlyCompactReview();
     const w = panelWidth();
     const focused = document.activeElement;
     const ownsFocus = focused instanceof HTMLElement && mainRef?.contains(focused);
@@ -626,6 +645,10 @@ export function TaskPanel(props: TaskPanelProps) {
         setStartTour(false);
         setDiffScrollTarget(path);
       }}
+      onReviewClick={() => {
+        setStartTour(false);
+        setDiffScrollTarget('');
+      }}
       tour={tour}
       onTourClick={() => {
         if (tour.stops().length > 0) {
@@ -643,7 +666,7 @@ export function TaskPanel(props: TaskPanelProps) {
         }
       }}
       tourDisabled={changedFileCount() === 0}
-      compact={topStripEmpty()}
+      compact={topStripEmpty() || onlyCompactReview()}
       onFileCountChange={setChangedFileCount}
       onUnderstandClick={(file) => openFileTour(file.path)}
       understanding={understanding}
@@ -756,9 +779,16 @@ export function TaskPanel(props: TaskPanelProps) {
     minSize: 60,
     absorberWeight: 0.25,
     content: () => (
-      <div style={{ height: '100%', 'min-height': topStripEmpty() ? '64px' : '140px' }}>
+      <div
+        style={{
+          height: '100%',
+          'min-height': topStripEmpty() || onlyCompactReview() ? '48px' : '140px',
+        }}
+      >
         {isGitUnavailable() ? (
           notesBodyEl
+        ) : onlyCompactReview() ? (
+          changedFilesEl
         ) : (
           <ResizablePanel
             direction="horizontal"
@@ -816,7 +846,11 @@ export function TaskPanel(props: TaskPanelProps) {
             <ResizablePanel
               direction="vertical"
               persistKey={`task:${props.task.id}`}
-              absorberIds={topStripEmpty() ? ['ai-terminal'] : ['notes-files', 'ai-terminal']}
+              absorberIds={
+                topStripEmpty() || onlyCompactReview()
+                  ? ['ai-terminal']
+                  : ['notes-files', 'ai-terminal']
+              }
               children={[
                 ...(supportCollapsed() ? [] : [notesAndFilesChild]),
                 shellSectionChild,

@@ -1,4 +1,4 @@
-import { Show, onMount } from 'solid-js';
+import { Show, createSignal, onMount } from 'solid-js';
 import {
   getProject,
   setActiveTask,
@@ -34,7 +34,8 @@ interface TaskChangedFilesSectionProps {
   selectedCommit: CommitSelection;
   onCommitNavigate: (selection: CommitSelection) => void;
   onDiffFileClick: (path: string) => void;
-  /** Shrink to a header strip: the column uses this while the list is empty. */
+  onReviewClick: () => void;
+  /** Shrink to the review entry when no other support content needs the space. */
   compact?: boolean;
   onFileCountChange?: (count: number) => void;
   /** Starts a guided tour of a changed file; omit to hide the row action. */
@@ -44,6 +45,7 @@ interface TaskChangedFilesSectionProps {
 }
 
 export function TaskChangedFilesSection(props: TaskChangedFilesSectionProps) {
+  const [changedFileCount, setChangedFileCount] = createSignal(0);
   const coverageReportPath = () => getProject(props.task.projectId)?.coverageReportPath;
   const diffBaseBranch = () =>
     getTaskDiffBaseBranch(props.task.gitIsolation, props.task.baseBranch);
@@ -68,12 +70,12 @@ export function TaskChangedFilesSection(props: TaskChangedFilesSectionProps) {
     setTaskFocusedPanel(props.task.id, 'canvas');
   };
 
-  let changedFilesRef: HTMLDivElement | undefined;
+  let reviewButtonRef: HTMLButtonElement | undefined;
 
   onMount(() => {
     const id = props.task.id;
     useFocusRegistration(`${id}:changed-files`, () => {
-      changedFilesRef?.focus();
+      reviewButtonRef?.focus();
     });
   });
 
@@ -89,7 +91,7 @@ export function TaskChangedFilesSection(props: TaskChangedFilesSectionProps) {
         // changed-file list is long. The ResizablePanel wrapper applies the
         // fixed 300 px cap for unpinned auto-growth.
         height: '100%',
-        'min-height': props.compact ? '56px' : '140px',
+        'min-height': props.compact ? '42px' : '84px',
         'max-height': '40vh',
         'min-width': '0',
         background: theme.taskPanelBg,
@@ -98,34 +100,34 @@ export function TaskChangedFilesSection(props: TaskChangedFilesSectionProps) {
       }}
       onClick={focusChangedFilesPanel}
     >
-      <div
-        style={{
-          padding: '4px 8px',
-          'font-size': sf(11),
-          'font-weight': '600',
-          color: theme.fgMuted,
-          'text-transform': 'uppercase',
-          'letter-spacing': '0.05em',
-          'border-bottom': `1px solid ${theme.border}`,
-          'flex-shrink': '0',
-          display: 'flex',
-          'align-items': 'center',
-          gap: '6px',
-        }}
-      >
-        <span
-          title="Changed Files"
+      <Show when={hasCommitNav() && (props.commitList.length > 0 || props.selectedCommit !== null)}>
+        <div
           style={{
-            flex: '1',
-            'min-width': '0',
-            overflow: 'hidden',
-            'white-space': 'nowrap',
-            'text-overflow': 'ellipsis',
+            padding: '4px 8px',
+            'font-size': sf(11),
+            'font-weight': '600',
+            color: theme.fgMuted,
+            'text-transform': 'uppercase',
+            'letter-spacing': '0.05em',
+            'border-bottom': `1px solid ${theme.border}`,
+            'flex-shrink': '0',
+            display: 'flex',
+            'align-items': 'center',
+            gap: '6px',
           }}
         >
-          Changed Files
-        </span>
-        <Show when={hasCommitNav()}>
+          <span
+            title="Changed Files"
+            style={{
+              flex: '1',
+              'min-width': '0',
+              overflow: 'hidden',
+              'white-space': 'nowrap',
+              'text-overflow': 'ellipsis',
+            }}
+          >
+            Changed Files
+          </span>
           <div style={{ display: 'flex', 'align-items': 'center', gap: '6px', 'flex-shrink': '0' }}>
             <Show when={canShowTree()}>
               <CommitTreeOverlay
@@ -143,8 +145,8 @@ export function TaskChangedFilesSection(props: TaskChangedFilesSectionProps) {
               compact={true}
             />
           </div>
-        </Show>
-      </div>
+        </div>
+      </Show>
       <Show when={selectedCommitInfo()}>
         {(commit) => (
           <div
@@ -185,7 +187,32 @@ export function TaskChangedFilesSection(props: TaskChangedFilesSectionProps) {
           Uncommitted changes only
         </div>
       </Show>
-      <div style={{ flex: '1', overflow: 'hidden' }}>
+      <button
+        ref={(el) => (reviewButtonRef = el)}
+        type="button"
+        class="task-review-changes-button"
+        onClick={(event) => {
+          event.stopPropagation();
+          focusChangedFilesPanel();
+          props.onReviewClick();
+        }}
+        style={{
+          margin: '6px 8px',
+          padding: '5px 8px',
+          border: `1px solid ${theme.border}`,
+          'border-radius': 'var(--radius-sm)',
+          background: theme.bgElevated,
+          color: theme.fg,
+          'font-size': sf(12),
+          'font-weight': '600',
+          'text-align': 'left',
+          cursor: 'pointer',
+          'flex-shrink': '0',
+        }}
+      >
+        Review changes (<span class="task-review-changes-count">{changedFileCount()}</span>)
+      </button>
+      <div style={{ display: 'none' }} aria-hidden="true">
         <ChangedFilesList
           worktreePath={props.task.worktreePath}
           projectRoot={getProject(props.task.projectId)?.path}
@@ -196,15 +223,17 @@ export function TaskChangedFilesSection(props: TaskChangedFilesSectionProps) {
           coverageReportPath={coverageReportPath()}
           selectedCommit={props.selectedCommit}
           onFileClick={(file) => props.onDiffFileClick(file.path)}
-          onFileCountChange={props.onFileCountChange}
+          onFileCountChange={(count) => {
+            setChangedFileCount(count);
+            props.onFileCountChange?.(count);
+          }}
           onOpenInEditorClick={focusChangedFilesPanel}
           onOpenMarkdownClick={openMarkdownInCanvas}
           onUnderstandClick={props.onUnderstandClick}
           understanding={props.understanding}
-          ref={(el) => (changedFilesRef = el)}
         />
       </div>
-      <Show when={props.tour}>
+      <Show when={!props.compact ? props.tour : undefined}>
         {(tour) => (
           <ChangeTourButton
             tour={tour()}

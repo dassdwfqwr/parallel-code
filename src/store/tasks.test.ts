@@ -158,6 +158,7 @@ vi.stubGlobal('window', {
 
 import {
   createTask,
+  createImportedTask,
   initMCPListeners,
   setTaskControl,
   collapseTask,
@@ -227,6 +228,29 @@ describe('task record helpers', () => {
       attachExisting: undefined,
       spawnDelayMs: undefined,
     });
+  });
+
+  it('defaults every base task record path to terminal tabs', async () => {
+    taskCreatedHandler(baseEvent);
+    expect(mockTasks['sub-task-1'].aiTerminalLayout).toBe('tabs');
+
+    vi.mocked(getProjectPath).mockReturnValue('/repo');
+    vi.mocked(isProjectMissing).mockReturnValue(false);
+    mockProjects = [{ id: 'proj-1', path: '/repo' }];
+    await createImportedTask({
+      projectId: 'proj-1',
+      worktree: {
+        path: '/repo/.worktrees/imported',
+        branch_name: 'task/imported',
+        has_committed_changes: false,
+        has_uncommitted_changes: false,
+      },
+      agentDef,
+    });
+    const imported = Object.values(mockTasks).find(
+      (task) => task.worktreePath === '/repo/.worktrees/imported',
+    );
+    expect(imported?.aiTerminalLayout).toBe('tabs');
   });
 
   it('preserves resume and attachment metadata on agent records', () => {
@@ -1048,6 +1072,7 @@ describe('createTask delegation options', () => {
     });
 
     expect(mockTasks['parent-1']).toMatchObject({
+      aiTerminalLayout: 'tabs',
       initialPrompt: 'Work through this backlog',
       savedInitialPrompt: 'Work through this backlog',
       autoMergeChildren: true,

@@ -99,6 +99,7 @@ function createBaseTaskRecord(args: {
     worktreePath: args.worktreePath,
     agentIds: [args.agentId],
     selectedAgentId: args.agentId,
+    aiTerminalLayout: 'tabs',
     shellAgentIds: [],
     notes: '',
     lastPrompt: '',

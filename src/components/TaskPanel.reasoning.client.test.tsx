@@ -11,6 +11,7 @@ import {
   showNotification,
   toggleFocusMode,
   setTaskFocusedPanel,
+  setTaskSplitMode,
 } from '../store/store';
 import { GIST_LABEL } from '../lib/understanding-tour';
 import type { Task } from '../store/types';
@@ -162,13 +163,27 @@ vi.mock('./UnderstandingTourDialog', () => ({
   ),
 }));
 vi.mock('./TaskChangedFilesSection', () => ({
-  TaskChangedFilesSection: (props: { onFileCountChange?: (count: number) => void }) => {
+  TaskChangedFilesSection: (props: {
+    onFileCountChange?: (count: number) => void;
+    onReviewClick?: () => void;
+  }) => {
+    const [count, setCount] = createSignal(0);
     fileInventory.mounts++;
     createEffect(() => {
-      fileInventory.report = props.onFileCountChange ?? (() => {});
+      const reportCount = props.onFileCountChange;
+      fileInventory.report = (next) => {
+        setCount(next);
+        reportCount?.(next);
+      };
     });
     onCleanup(() => fileInventory.disposals++);
-    return <div class="test-files" />;
+    return (
+      <div class="test-files">
+        <button class="test-review-changes" onClick={() => props.onReviewClick?.()}>
+          Review changes ({count()})
+        </button>
+      </div>
+    );
   },
 }));
 vi.mock('./TaskShellSection', () => ({ TaskShellSection: () => null }));
@@ -529,15 +544,27 @@ it('collapses empty support panels without disposing file watching or terminal s
   expect(toggle().getAttribute('aria-expanded')).toBe('true');
   toggle().click();
   expect(container.querySelector('.test-notes')).toBeNull();
+  expect(notes.isConnected).toBe(false);
   fileInventory.report(2);
-  expect(container.querySelector('.test-notes')).toBe(notes);
+  // Changes alone open only the compact review entry, not an empty notes box.
+  expect(container.querySelector('.test-notes')).toBeNull();
   expect(container.querySelector('.test-files')).not.toBeNull();
+  expect(container.querySelector('.test-review-changes')?.textContent).toContain('(2)');
   expect(container.querySelector('.task-support-toggle')).toBeNull();
   expect(container.querySelector('.test-terminal')).toBe(terminal);
   expect(container.querySelector('.test-prompt')).toBe(prompt);
   expect(prompt.value).toBe('Unsent prompt');
   expect(fileInventory.mounts).toBe(mounts + 1);
   expect(fileInventory.disposals).toBe(disposals);
+});
+
+it('opens the all-changes diff from the compact review entry', () => {
+  const { container } = mountEmptyTask();
+  fileInventory.report(3);
+  expectDefined(container.querySelector<HTMLButtonElement>('.test-review-changes')).click();
+  const diff = expectDefined(container.querySelector<HTMLElement>('.test-diff'));
+  expect(diff.dataset.open).toBe('true');
+  expect(diff.dataset.file).toBe('');
 });
 
 it.each(['notes', 'changed-files'])(
@@ -572,9 +599,10 @@ it('keeps plans, steps and shells visible even with no notes or files', () => {
   expect(isCollapsed()).toBe(true);
 });
 
-it('keeps prompt focus when incoming files reopen the supporting column', async () => {
+it('keeps compact review changes out of the wide focus-mode support column', async () => {
   const width = vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockReturnValue(1200);
   try {
+    vi.mocked(setTaskSplitMode).mockClear();
     toggleFocusMode(true);
     const { container } = mountEmptyTask();
     const prompt = expectDefined(container.querySelector<HTMLTextAreaElement>('.test-prompt'));
@@ -585,6 +613,7 @@ it('keeps prompt focus when incoming files reopen the supporting column', async 
     expect(document.activeElement).toBe(prompt);
     expect(prompt.value).toBe('Keep typing');
     expect(container.querySelector('.test-files')).not.toBeNull();
+    expect(setTaskSplitMode).toHaveBeenLastCalledWith('task', false);
   } finally {
     width.mockRestore();
   }
