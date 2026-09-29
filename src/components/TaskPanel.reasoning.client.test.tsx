@@ -25,6 +25,7 @@ const fileInventory = vi.hoisted(() => ({
   mounts: 0,
   disposals: 0,
 }));
+const panelSizes = vi.hoisted(() => new Map<string, number>());
 
 const channels = vi.hoisted(
   () =>
@@ -59,9 +60,9 @@ vi.mock('../store/store', () => {
     unregisterAction: vi.fn(),
     activateCanvasTab: vi.fn(),
     isTaskCanvasVisible: () => true,
-    getPanelUserSize: () => undefined,
-    deletePanelUserSize: vi.fn(),
-    setPanelUserSize: vi.fn(),
+    getPanelUserSize: (key: string) => panelSizes.get(key),
+    deletePanelUserSize: vi.fn((keys: string[]) => keys.forEach((key) => panelSizes.delete(key))),
+    setPanelUserSize: vi.fn((key: string, value: number) => panelSizes.set(key, value)),
     setTaskSplitMode: vi.fn(),
     registerFocusFn: vi.fn(),
     unregisterFocusFn: vi.fn(),
@@ -208,6 +209,7 @@ afterEach(() => {
   document.body.replaceChildren();
   channels.length = 0;
   vi.mocked(showNotification).mockClear();
+  panelSizes.clear();
 });
 
 const tourCard = (title: string, label = 'KEY DECISION') => ({
@@ -567,20 +569,27 @@ it('opens the all-changes diff from the compact review entry', () => {
   expect(diff.dataset.file).toBe('');
 });
 
-it.each(['notes', 'changed-files'])(
-  'reveals compact support when keyboard navigation targets %s',
-  (panel) => {
-    const { container } = mountEmptyTask();
-    expect(container.querySelector('.test-notes')).toBeNull();
-    setTaskFocusedPanel('task', panel);
-    expect(container.querySelector('.test-notes')).not.toBeNull();
-    expect(container.querySelector('.task-support-toggle')?.getAttribute('aria-expanded')).toBe(
-      'true',
-    );
-  },
-);
+it('reveals empty Notes only when keyboard navigation targets Notes', () => {
+  const { container } = mountEmptyTask();
+  expect(container.querySelector('.test-notes')).toBeNull();
+  setTaskFocusedPanel('task', 'notes');
+  expect(container.querySelector('.test-notes')).not.toBeNull();
+  expect(container.querySelector('.task-support-toggle')?.getAttribute('aria-expanded')).toBe(
+    'true',
+  );
+});
 
-it('keeps plans, steps and shells visible even with no notes or files', () => {
+it('reveals Review without also allocating an empty Notes pane', () => {
+  const { container } = mountEmptyTask();
+  setTaskFocusedPanel('task', 'changed-files');
+  expect(container.querySelector('.test-files')).not.toBeNull();
+  expect(container.querySelector('.test-notes')).toBeNull();
+  expect(container.querySelector('.task-support-toggle')?.getAttribute('aria-expanded')).toBe(
+    'true',
+  );
+});
+
+it('keeps auxiliaries visible without restoring an empty Notes/Review height', () => {
   const { container, setTask } = mountEmptyTask();
   const isCollapsed = () =>
     container.querySelector('.task-support-toggle')?.getAttribute('aria-expanded') === 'false';
@@ -590,11 +599,16 @@ it('keeps plans, steps and shells visible even with no notes or files', () => {
   expect(container.querySelector('.test-notes')).not.toBeNull();
   setTask('planContent', undefined);
   expect(isCollapsed()).toBe(true);
+  panelSizes.set('task:task:notes-files', 320);
   setTask('stepsEnabled', true);
   expect(isCollapsed()).toBe(false);
+  expect(container.querySelector('.test-notes')).toBeNull();
+  expect(container.querySelector('.test-files')).not.toBeNull();
+  expect(panelSizes.has('task:task:notes-files')).toBe(false);
   setTask('stepsEnabled', false);
   setTask('shellAgentIds', ['shell']);
   expect(isCollapsed()).toBe(false);
+  expect(container.querySelector('.test-notes')).toBeNull();
   setTask('shellAgentIds', []);
   expect(isCollapsed()).toBe(true);
 });

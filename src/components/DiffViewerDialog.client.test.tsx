@@ -158,6 +158,7 @@ it('generates without opening the diff, waits for Start tour, and retains its ca
   );
   expect(host.querySelector('button[aria-busy="true"] .inline-spinner')).not.toBeNull();
   expect(host.querySelector('[data-testid="diff-target"]')).toBeNull();
+  expect(host.querySelector('[data-testid="file-list"]')).toBeNull();
   complete();
   expect(host.querySelector('[data-testid="diff-target"]')).toBeNull();
   expect(host.querySelector('button')?.textContent).toContain('Start tour');

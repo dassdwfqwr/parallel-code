@@ -348,14 +348,14 @@ describe('reorderTaskVisually', () => {
 });
 
 describe('toggleAITerminalLayout', () => {
-  it('flips an unset (split) layout to tabs and back', () => {
+  it('treats an unset legacy layout as tabs and persists both choices', () => {
     mockTasks['task-1'] = { agentIds: ['a', 'b'], shellAgentIds: [] };
 
     toggleAITerminalLayout('task-1');
-    expect(mockTasks['task-1'].aiTerminalLayout).toBe('tabs');
+    expect(mockTasks['task-1'].aiTerminalLayout).toBe('split');
 
     toggleAITerminalLayout('task-1');
-    expect(mockTasks['task-1'].aiTerminalLayout).toBe('split');
+    expect(mockTasks['task-1'].aiTerminalLayout).toBe('tabs');
   });
 
   it('is a no-op for an unknown task', () => {

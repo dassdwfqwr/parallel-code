@@ -1,12 +1,5 @@
-import { Show, createSignal, onMount } from 'solid-js';
-import {
-  getProject,
-  setActiveTask,
-  setTaskFocusedPanel,
-  isPanelFocused,
-  openCanvasDocument,
-} from '../store/store';
-import { ChangedFilesList } from './ChangedFilesList';
+import { Show, createMemo, createSignal, onMount } from 'solid-js';
+import { getProject, setActiveTask, setTaskFocusedPanel, isPanelFocused } from '../store/store';
 import { CommitTreeOverlay } from './CommitTreeOverlay';
 import {
   CommitNavBar,
@@ -18,11 +11,11 @@ import { theme } from '../lib/theme';
 import { sf } from '../lib/fontScale';
 import { useFocusRegistration } from '../lib/focus-registration';
 import type { Task } from '../store/types';
-import type { ChangedFile, CommitInfo } from '../ipc/types';
+import type { CommitInfo } from '../ipc/types';
 import type { ChangeTourController } from '../lib/create-change-tour';
-import type { UnderstandingTourState } from '../lib/create-understanding-tour';
 import { getTaskDiffBaseBranch } from '../lib/load-task-diff';
 import { ChangeTourButton } from './ChangeTourButton';
+import { ChangedFilesInventory, type ChangedFilesInventoryState } from './ChangedFilesInventory';
 
 interface TaskChangedFilesSectionProps {
   tour?: ChangeTourController;
@@ -33,20 +26,17 @@ interface TaskChangedFilesSectionProps {
   commitList: CommitInfo[];
   selectedCommit: CommitSelection;
   onCommitNavigate: (selection: CommitSelection) => void;
-  onDiffFileClick: (path: string) => void;
   onReviewClick: () => void;
   /** Shrink to the review entry when no other support content needs the space. */
   compact?: boolean;
   onFileCountChange?: (count: number) => void;
-  /** Starts a guided tour of a changed file; omit to hide the row action. */
-  onUnderstandClick?: (file: ChangedFile) => void;
-  /** Lets each row's tour button show its own generating/ready state. */
-  understanding?: UnderstandingTourState;
 }
 
 export function TaskChangedFilesSection(props: TaskChangedFilesSectionProps) {
-  const [changedFileCount, setChangedFileCount] = createSignal(0);
-  const coverageReportPath = () => getProject(props.task.projectId)?.coverageReportPath;
+  const [inventory, setInventory] = createSignal<ChangedFilesInventoryState>({
+    status: 'loading',
+    count: 0,
+  });
   const diffBaseBranch = () =>
     getTaskDiffBaseBranch(props.task.gitIsolation, props.task.baseBranch);
   const hasCommitNav = () =>
@@ -64,10 +54,17 @@ export function TaskChangedFilesSection(props: TaskChangedFilesSectionProps) {
     setActiveTask(props.task.id);
     setTaskFocusedPanel(props.task.id, 'changed-files');
   };
-  const openMarkdownInCanvas = (file: ChangedFile) => {
-    setActiveTask(props.task.id);
-    openCanvasDocument(props.task.id, file.path);
-    setTaskFocusedPanel(props.task.id, 'canvas');
+  const reviewLabel = createMemo(() => {
+    const state = inventory();
+    if (state.status === 'loading') return 'Loading changes…';
+    if (state.status === 'error') return 'Changes unavailable';
+    if (state.count === 0) return 'No changes';
+    return `Review ${state.count}`;
+  });
+  const reviewReady = () => inventory().status === 'ready' && inventory().count > 0;
+  const updateInventory = (state: ChangedFilesInventoryState) => {
+    setInventory(state);
+    props.onFileCountChange?.(state.count);
   };
 
   let reviewButtonRef: HTMLButtonElement | undefined;
@@ -84,15 +81,9 @@ export function TaskChangedFilesSection(props: TaskChangedFilesSectionProps) {
       class="task-changed-files-section focusable-panel"
       data-panel-focused={isPanelFocused(props.task.id, 'changed-files') ? 'true' : 'false'}
       style={{
-        // `height: 100%` fills when the panel is an absorber (notes-split
-        // horizontal, 50/50 with notes). `min-height` gives the content-sized
-        // case (split-right vertical) a usable default, while `max-height`
-        // keeps the panel from ballooning past ~40 % of the viewport when the
-        // changed-file list is long. The ResizablePanel wrapper applies the
-        // fixed 300 px cap for unpinned auto-growth.
-        height: '100%',
-        'min-height': props.compact ? '42px' : '84px',
-        'max-height': '40vh',
+        // Review is a content-sized launcher. The full list and coverage UI
+        // mount only inside DiffViewerDialog after the launcher is activated.
+        'min-height': '42px',
         'min-width': '0',
         background: theme.taskPanelBg,
         display: 'flex',
@@ -194,8 +185,12 @@ export function TaskChangedFilesSection(props: TaskChangedFilesSectionProps) {
         onClick={(event) => {
           event.stopPropagation();
           focusChangedFilesPanel();
-          props.onReviewClick();
+          if (reviewReady()) props.onReviewClick();
         }}
+        aria-disabled={!reviewReady()}
+        aria-busy={inventory().status === 'loading'}
+        aria-live="polite"
+        title={inventory().status === 'error' ? 'Could not load changed files' : undefined}
         style={{
           margin: '6px 8px',
           padding: '5px 8px',
@@ -206,33 +201,22 @@ export function TaskChangedFilesSection(props: TaskChangedFilesSectionProps) {
           'font-size': sf(12),
           'font-weight': '600',
           'text-align': 'left',
-          cursor: 'pointer',
+          cursor: reviewReady() ? 'pointer' : 'default',
+          opacity: inventory().status === 'error' ? '0.75' : '1',
           'flex-shrink': '0',
         }}
       >
-        Review changes (<span class="task-review-changes-count">{changedFileCount()}</span>)
+        {reviewLabel()}
       </button>
-      <div style={{ display: 'none' }} aria-hidden="true">
-        <ChangedFilesList
-          worktreePath={props.task.worktreePath}
-          projectRoot={getProject(props.task.projectId)?.path}
-          branchName={props.task.branchName}
-          baseBranch={diffBaseBranch()}
-          isActive={props.isActive}
-          panelFocused={isPanelFocused(props.task.id, 'changed-files')}
-          coverageReportPath={coverageReportPath()}
-          selectedCommit={props.selectedCommit}
-          onFileClick={(file) => props.onDiffFileClick(file.path)}
-          onFileCountChange={(count) => {
-            setChangedFileCount(count);
-            props.onFileCountChange?.(count);
-          }}
-          onOpenInEditorClick={focusChangedFilesPanel}
-          onOpenMarkdownClick={openMarkdownInCanvas}
-          onUnderstandClick={props.onUnderstandClick}
-          understanding={props.understanding}
-        />
-      </div>
+      <ChangedFilesInventory
+        worktreePath={props.task.worktreePath}
+        projectRoot={getProject(props.task.projectId)?.path}
+        branchName={props.task.branchName}
+        baseBranch={diffBaseBranch()}
+        isActive={props.isActive}
+        selectedCommit={props.selectedCommit}
+        onChange={updateInventory}
+      />
       <Show when={!props.compact ? props.tour : undefined}>
         {(tour) => (
           <ChangeTourButton

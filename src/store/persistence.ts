@@ -50,6 +50,7 @@ import type {
   PersistedWindowState,
   Project,
 } from './types';
+import { resolveAITerminalLayout } from '../lib/ai-terminal-layout';
 import type { AgentDef } from '../ipc/types';
 import { inferDockerSource } from '../lib/docker';
 import { DEFAULT_TERMINAL_FONT } from '../lib/fonts';
@@ -982,7 +983,9 @@ export async function loadState(): Promise<void> {
           agentIds,
           agentSessionIds: restoredAgentSessionIds(pt, agentIds),
           selectedAgentId: validAgentId(pt.selectedAgentId, agentIds) ?? agentIds[0],
-          aiTerminalLayout: pt.aiTerminalLayout === 'tabs' ? 'tabs' : undefined,
+          // Missing is the legacy pre-tabs record. Materialize the resolved
+          // default so the migrated task and an explicit split both persist.
+          aiTerminalLayout: resolveAITerminalLayout(pt.aiTerminalLayout),
           mainAgentView: pt.mainAgentView === 'chat' ? 'chat' : undefined,
           codexChatThreadId:
             typeof pt.codexChatThreadId === 'string' ? pt.codexChatThreadId : undefined,
@@ -1124,7 +1127,7 @@ export async function loadState(): Promise<void> {
           worktreePath: pt.worktreePath,
           agentIds: [],
           selectedAgentId: undefined,
-          aiTerminalLayout: pt.aiTerminalLayout === 'tabs' ? 'tabs' : undefined,
+          aiTerminalLayout: resolveAITerminalLayout(pt.aiTerminalLayout),
           mainAgentView: pt.mainAgentView === 'chat' ? 'chat' : undefined,
           codexChatThreadId:
             typeof pt.codexChatThreadId === 'string' ? pt.codexChatThreadId : undefined,

@@ -897,7 +897,7 @@ describe('prompt draft persistence', () => {
 });
 
 describe('AI terminal layout persistence', () => {
-  it('persists a task tabbed layout choice', async () => {
+  it.each(['tabs', 'split'] as const)('persists an explicit %s layout choice', async (layout) => {
     setStore('taskOrder', ['task-1']);
     setStore('tasks', {
       'task-1': {
@@ -911,7 +911,7 @@ describe('AI terminal layout persistence', () => {
         notes: '',
         lastPrompt: '',
         gitIsolation: 'worktree',
-        aiTerminalLayout: 'tabs',
+        aiTerminalLayout: layout,
       },
     });
     mockInvoke.mockResolvedValueOnce(undefined);
@@ -919,21 +919,22 @@ describe('AI terminal layout persistence', () => {
     await saveState();
 
     const saved = JSON.parse(mockInvoke.mock.calls[0][1].json);
-    expect(saved.tasks['task-1'].aiTerminalLayout).toBe('tabs');
+    expect(saved.tasks['task-1'].aiTerminalLayout).toBe(layout);
   });
 
-  it('restores a tabbed layout and defaults the rest to split (undefined)', async () => {
+  it('migrates missing layouts to tabs and preserves an explicit split choice', async () => {
     const def = agentDef();
     mockInvoke.mockResolvedValueOnce(
       JSON.stringify({
         projects: [{ id: 'project-1', name: 'Repo', path: '/repo', color: 'hsl(0, 70%, 75%)' }],
         lastProjectId: 'project-1',
         lastAgentId: null,
-        taskOrder: ['task-1', 'task-2'],
+        taskOrder: ['task-1', 'task-2', 'task-3'],
         collapsedTaskOrder: [],
         tasks: {
           'task-1': { ...persistedTask(def), aiTerminalLayout: 'tabs' },
-          'task-2': { ...persistedTask(def), id: 'task-2', aiTerminalLayout: 'nonsense' },
+          'task-2': { ...persistedTask(def), id: 'task-2' },
+          'task-3': { ...persistedTask(def), id: 'task-3', aiTerminalLayout: 'split' },
         },
         activeTaskId: 'task-1',
         sidebarVisible: true,
@@ -943,8 +944,9 @@ describe('AI terminal layout persistence', () => {
     await loadState();
 
     expect(store.tasks['task-1'].aiTerminalLayout).toBe('tabs');
-    // Unknown/absent values fall back to the default (split → undefined).
-    expect(store.tasks['task-2'].aiTerminalLayout).toBeUndefined();
+    // An absent value is a legacy record and adopts the current default.
+    expect(store.tasks['task-2'].aiTerminalLayout).toBe('tabs');
+    expect(store.tasks['task-3'].aiTerminalLayout).toBe('split');
   });
 
   it('restores a tabbed layout for a collapsed task', async () => {

@@ -3,11 +3,12 @@ import { render } from 'solid-js/web';
 import { afterEach, expect, it, vi } from 'vitest';
 import type { Task } from '../store/types';
 import { TaskChangedFilesSection } from './TaskChangedFilesSection';
+import type { ChangedFilesInventoryState } from './ChangedFilesInventory';
 
 const inventory = vi.hoisted(() => ({
   mounts: 0,
   disposals: 0,
-  report: (_count: number) => {},
+  report: (_state: ChangedFilesInventoryState) => {},
 }));
 const registeredFocus = vi.hoisted(() => ({ run: () => {} }));
 
@@ -32,15 +33,15 @@ vi.mock('./CommitNavBar', () => ({
   isUncommittedSelection: (value: unknown) => value === 'uncommitted',
 }));
 vi.mock('./ChangeTourButton', () => ({ ChangeTourButton: () => null }));
-vi.mock('./ChangedFilesList', () => ({
-  ChangedFilesList: (props: { onFileCountChange?: (count: number) => void }) => {
+vi.mock('./ChangedFilesInventory', () => ({
+  ChangedFilesInventory: (props: { onChange: (state: ChangedFilesInventoryState) => void }) => {
     inventory.mounts++;
     createEffect(() => {
-      const reportCount = props.onFileCountChange;
-      inventory.report = (count) => reportCount?.(count);
+      const report = props.onChange;
+      inventory.report = (state) => report(state);
     });
     onCleanup(() => inventory.disposals++);
-    return <div class="test-mounted-file-list" />;
+    return null;
   },
 }));
 
@@ -64,7 +65,7 @@ const task: Task = {
   lastPrompt: '',
 };
 
-it('keeps the inventory mounted while exposing a focusable compact review count', () => {
+it('uses a lightweight inventory and exposes explicit review states', () => {
   const beforeMounts = inventory.mounts;
   const beforeDisposals = inventory.disposals;
   const onReviewClick = vi.fn();
@@ -79,7 +80,6 @@ it('keeps the inventory mounted while exposing a focusable compact review count'
         commitList={[]}
         selectedCommit={null}
         onCommitNavigate={() => {}}
-        onDiffFileClick={() => {}}
         onReviewClick={onReviewClick}
         onFileCountChange={onFileCountChange}
         compact
@@ -90,12 +90,24 @@ it('keeps the inventory mounted while exposing a focusable compact review count'
 
   expect(inventory.mounts).toBe(beforeMounts + 1);
   expect(inventory.disposals).toBe(beforeDisposals);
-  expect(container.querySelector('.test-mounted-file-list')).not.toBeNull();
+  expect(container.querySelector('.changed-files-list-panel')).toBeNull();
   expect(container.querySelector('.file-row')).toBeNull();
 
-  inventory.report(4);
   const review = container.querySelector<HTMLButtonElement>('.task-review-changes-button');
-  expect(review?.textContent).toContain('Review changes (4)');
+  expect(review?.textContent).toBe('Loading changes…');
+  expect(review?.getAttribute('aria-disabled')).toBe('true');
+
+  inventory.report({ status: 'ready', count: 0 });
+  expect(review?.textContent).toBe('No changes');
+  expect(review?.getAttribute('aria-disabled')).toBe('true');
+
+  inventory.report({ status: 'error', count: 0 });
+  expect(review?.textContent).toBe('Changes unavailable');
+  expect(review?.getAttribute('title')).toBe('Could not load changed files');
+
+  inventory.report({ status: 'ready', count: 4 });
+  expect(review?.textContent).toBe('Review 4');
+  expect(review?.getAttribute('aria-disabled')).toBe('false');
   expect(onFileCountChange).toHaveBeenCalledWith(4);
 
   registeredFocus.run();

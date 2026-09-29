@@ -43,7 +43,7 @@ beforeEach(() => {
     // A fresh agent list per test: the store pushes into the array it is given.
     agentIds: [...task.agentIds],
     // Setting a task merges, so the keys the tests add have to be cleared here.
-    aiTerminalLayout: undefined,
+    aiTerminalLayout: 'split',
     canvasOpen: undefined,
   });
 });
@@ -75,6 +75,12 @@ it('pays for the open canvas on top of the terminal panes', async () => {
 
 it('leaves the column alone when the panes are stacked as tabs', async () => {
   setStore('tasks', 'task-1', 'aiTerminalLayout', 'tabs');
+  await addAgentToTask('task-1', codex);
+  expect(columnWidth()).toBeUndefined();
+});
+
+it('treats an unset legacy layout as tabs', async () => {
+  setStore('tasks', 'task-1', 'aiTerminalLayout', undefined);
   await addAgentToTask('task-1', codex);
   expect(columnWidth()).toBeUndefined();
 });

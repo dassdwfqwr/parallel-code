@@ -23,6 +23,7 @@ import { MAX_PROMPT_HISTORY, promptHistoryOf } from '../lib/prompt-history';
 import { setTaskFocusedPanel, shellPanelId } from './focused-panel';
 import { getProject, getProjectPath, getProjectBranchPrefix, isProjectMissing } from './projects';
 import { setPendingShellCommand } from '../lib/bookmarks';
+import { resolveAITerminalLayout } from '../lib/ai-terminal-layout';
 import {
   markAgentSpawned,
   markAgentBusy,
@@ -814,7 +815,7 @@ export function setLastPrompt(taskId: string, text: string, agentId?: string): v
 export function toggleAITerminalLayout(taskId: string): void {
   const task = store.tasks[taskId];
   if (!task) return;
-  const next = (task.aiTerminalLayout ?? 'split') === 'split' ? 'tabs' : 'split';
+  const next = resolveAITerminalLayout(task.aiTerminalLayout) === 'split' ? 'tabs' : 'split';
   setStore('tasks', taskId, 'aiTerminalLayout', next);
 }
 

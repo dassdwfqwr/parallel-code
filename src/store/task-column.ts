@@ -9,6 +9,7 @@ import {
   TASK_TILE_MIN_WIDTH,
 } from '../lib/layout-sizes';
 import { isTaskCanvasVisible } from '../lib/canvas-tabs';
+import { resolveAITerminalLayout } from '../lib/ai-terminal-layout';
 import { store } from './core';
 import { getPanelUserSize, setPanelUserSize } from './ui';
 
@@ -38,7 +39,7 @@ export function resizeTaskColumnForCanvas(taskId: string, direction: 1 | -1): vo
 export function widenTaskColumnForAgentPanes(taskId: string): void {
   const task = store.tasks[taskId];
   // Tabs stack the panes on top of each other, so they share one pane's width.
-  if (!task || task.aiTerminalLayout === 'tabs') return;
+  if (!task || resolveAITerminalLayout(task.aiTerminalLayout) === 'tabs') return;
   const width = columnWidth(taskId);
   const body = width - (isTaskCanvasVisible(task) ? canvasWidth(taskId) : 0);
   const needed = task.agentIds.length * AGENT_PANE_MIN_WIDTH;

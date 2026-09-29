@@ -47,6 +47,7 @@ import type { Task } from '../store/types';
 import type { AgentDef } from '../ipc/types';
 import type { PromptInputHandle } from './PromptInput';
 import { buildTaskAgentArgs, isResumeArgsFailure } from '../lib/agent-args';
+import { resolveAITerminalLayout } from '../lib/ai-terminal-layout';
 
 type StepNavApi = TranscriptMarks;
 
@@ -201,7 +202,8 @@ export function TaskAITerminal(props: TaskAITerminalProps) {
   const fileNameFromPath = (filePath: string) => filePath.split('/').pop() ?? filePath;
 
   const multipleAgents = () => props.task.agentIds.length > 1;
-  const tabsMode = () => multipleAgents() && props.task.aiTerminalLayout === 'tabs';
+  const tabsMode = () =>
+    multipleAgents() && resolveAITerminalLayout(props.task.aiTerminalLayout) === 'tabs';
   const visibleAgentId = () =>
     props.task.agentIds.includes(props.selectedAgentId)
       ? props.selectedAgentId

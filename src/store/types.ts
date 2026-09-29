@@ -206,8 +206,8 @@ export interface Task {
   agentSessionIds?: Record<string, string>;
   selectedAgentId?: string;
   /** Layout for a task's AI terminals when it has more than one agent.
-   *  'split' (default) tiles them side by side; 'tabs' shows only the selected
-   *  agent, using the header agent chips as tabs. */
+   *  'tabs' (default, including legacy missing values) shows only the selected
+   *  agent; 'split' is an explicit persisted side-by-side choice. */
   aiTerminalLayout?: 'split' | 'tabs';
   shellAgentIds: string[];
   notes: string;
