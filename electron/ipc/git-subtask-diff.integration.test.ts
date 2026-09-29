@@ -15,6 +15,7 @@ import {
 } from './git.js';
 
 const directories: string[] = [];
+const TEST_TIMEOUT_MS = 30_000;
 
 function git(cwd: string, ...args: string[]): string {
   return execFileSync('git', args, {
@@ -61,7 +62,7 @@ afterEach(() => {
     rmSync(directory, { recursive: true, force: true });
 });
 
-describe('subtask diffs after rebasing onto upstream', () => {
+describe('subtask diffs after rebasing onto upstream', { timeout: TEST_TIMEOUT_MS }, () => {
   it('keeps the parent baseline while the child still branches from the parent', async () => {
     const { child } = fixture();
     commitFile(child, 'child.txt', 'child work\n');

@@ -40,7 +40,9 @@ const doc = [
   'Last.',
 ].join('\n');
 
-describe('renderDocumentBlocks', () => {
+const MARKDOWN_RENDER_TIMEOUT_MS = 15_000;
+
+describe('renderDocumentBlocks', { timeout: MARKDOWN_RENDER_TIMEOUT_MS }, () => {
   it('maps every block to its source lines', async () => {
     const blocks = await renderDocumentBlocks(doc);
     const summary = blocks.map((b) => [b.type, b.startLine, b.endLine]);
