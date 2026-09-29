@@ -2993,6 +2993,7 @@ describe('Coordinator deregisterCoordinator', () => {
       coordinator.deregisterCoordinator('coord-1');
 
       expect(c.initialPromptTimers.has('task-1')).toBe(false);
+      mockWriteToAgent.mockClear();
       await vi.advanceTimersByTimeAsync(2_000);
       expect(mockWriteToAgent).not.toHaveBeenCalledWith(
         expect.any(String),
