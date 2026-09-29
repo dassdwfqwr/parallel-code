@@ -25,7 +25,12 @@ const ANTIGRAVITY_GROUP_LABELS: Record<string, string> = {
 };
 const POPOVER_WIDTH = 300;
 
-function UsageMeter(props: { label: string; window: UsageWindow; width?: number }) {
+function UsageMeter(props: {
+  label: string;
+  labelTitle?: string;
+  window: UsageWindow;
+  width?: number;
+}) {
   const warn = () => props.window.usedPercent >= USAGE_WARN_PERCENT;
   const color = () => (warn() ? theme.warning : theme.accent);
   const reset = () => formatReset(props.window.resetsAt);
@@ -34,10 +39,12 @@ function UsageMeter(props: { label: string; window: UsageWindow; width?: number 
 
   return (
     <span style={{ display: 'inline-flex', 'align-items': 'center', gap: '6px' }}>
-      <span style={{ color: theme.fgSubtle }}>{props.label}</span>
+      <span style={{ color: theme.fgSubtle }} title={props.labelTitle}>
+        {props.label}
+      </span>
       <span
         role="progressbar"
-        aria-label={`${props.label} window remaining`}
+        aria-label={`${props.labelTitle ?? props.label} window remaining`}
         aria-valuenow={left()}
         aria-valuemin={0}
         aria-valuemax={100}
@@ -168,23 +175,52 @@ function ProviderUsage(props: { provider: UsageProvider }) {
       const windowLabel = group.fiveHour ? '5h' : '7d';
       const groupLabel =
         props.provider === 'antigravity' ? ANTIGRAVITY_GROUP_LABELS[group.id] : undefined;
-      return [{ label: groupLabel ? `${groupLabel} ${windowLabel}` : windowLabel, window }];
+      return [
+        {
+          label: groupLabel ? `${groupLabel} ${windowLabel}` : windowLabel,
+          labelTitle: groupLabel ? `${group.label} · ${windowLabel}` : undefined,
+          window,
+        },
+      ];
     });
   });
+  const description = () => {
+    if (props.provider !== 'antigravity') return `Refresh ${PROVIDER_LABELS[props.provider]} usage`;
+    return 'Refresh Antigravity usage. G means Gemini Models; 3P means Claude and GPT Models';
+  };
+
+  const openPopover = (element: HTMLElement) => {
+    setAnchor(popoverAnchor(element.getBoundingClientRect()));
+  };
 
   return (
     <Show when={usageVisible(usage())}>
-      <span
-        role="status"
+      <button
+        type="button"
+        data-testid="usage-provider"
+        aria-label={description()}
+        title={description()}
         onClick={() => void refreshUsage(props.provider, { force: true })}
-        onMouseEnter={(e) => setAnchor(popoverAnchor(e.currentTarget.getBoundingClientRect()))}
-        onMouseLeave={() => setAnchor(null)}
+        onMouseEnter={(e) => openPopover(e.currentTarget)}
+        onMouseLeave={(e) => {
+          if (document.activeElement !== e.currentTarget) setAnchor(null);
+        }}
+        onFocus={(e) => openPopover(e.currentTarget)}
+        onBlur={() => setAnchor(null)}
         style={{
           display: 'inline-flex',
           'align-items': 'center',
           gap: '10px',
           cursor: 'pointer',
           opacity: stale() ? '0.6' : '1',
+          color: 'inherit',
+          background: 'transparent',
+          border: '0',
+          padding: '0',
+          'font-family': 'inherit',
+          'font-size': 'inherit',
+          'white-space': 'nowrap',
+          'flex-shrink': '0',
         }}
       >
         <span
@@ -197,12 +233,18 @@ function ProviderUsage(props: { provider: UsageProvider }) {
           {PROVIDER_LABELS[props.provider]}
         </span>
         <For each={headlines()}>
-          {(headline) => <UsageMeter label={headline.label} window={headline.window} />}
+          {(headline) => (
+            <UsageMeter
+              label={headline.label}
+              labelTitle={headline.labelTitle}
+              window={headline.window}
+            />
+          )}
         </For>
         <Show when={!hasUsageSnapshot(usage())}>
           <span>usage unavailable · {usage().error}</span>
         </Show>
-      </span>
+      </button>
       <Show when={anchor()}>
         {(a) => <UsagePopover provider={props.provider} usage={usage()} anchor={a()} />}
       </Show>
@@ -221,6 +263,8 @@ export function UsageStatusBar() {
   return (
     <Show when={visible()}>
       <div
+        role="group"
+        aria-label="AI usage limits; scroll horizontally for more providers"
         style={{
           height: '24px',
           'min-height': '24px',
@@ -233,7 +277,8 @@ export function UsageStatusBar() {
           'font-size': sf(11),
           color: theme.fgMuted,
           'white-space': 'nowrap',
-          overflow: 'hidden',
+          'overflow-x': 'auto',
+          'overflow-y': 'hidden',
           'user-select': 'none',
           'flex-shrink': '0',
         }}

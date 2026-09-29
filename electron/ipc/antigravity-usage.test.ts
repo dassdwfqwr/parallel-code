@@ -117,7 +117,31 @@ describe('parseAntigravityUsageResponse', () => {
     const base = usageEnvelope() as Record<string, unknown>;
     expect(parseAntigravityUsageResponse({ ...base, status: 'ERROR' }, NOW)).toBeNull();
     expect(parseAntigravityUsageResponse({ ...base, num_turns: 1 }, NOW)).toBeNull();
+    expect(parseAntigravityUsageResponse({ ...base, usage: undefined }, NOW)).toBeNull();
+    expect(
+      parseAntigravityUsageResponse({
+        ...base,
+        usage: { input_tokens: 0, output_tokens: 0 },
+      }),
+    ).toBeNull();
     expect(parseAntigravityUsageResponse({ ...base, usage: { total_tokens: 1 } }, NOW)).toBeNull();
+    expect(
+      parseAntigravityUsageResponse({
+        ...base,
+        usage: { input_tokens: 0, output_tokens: 1, total_tokens: 0 },
+      }),
+    ).toBeNull();
+    expect(
+      parseAntigravityUsageResponse({
+        ...base,
+        usage: {
+          input_tokens: 0,
+          output_tokens: 0,
+          total_tokens: 0,
+          details: { cached_tokens: 1 },
+        },
+      }),
+    ).toBeNull();
     expect(
       parseAntigravityUsageResponse({
         ...base,
@@ -132,6 +156,19 @@ describe('parseAntigravityUsageResponse', () => {
         status: 'SUCCESS',
         num_turns: 0,
         command: { name: 'usage', data: { groups: [{ name: 'Unknown', buckets: [] }] } },
+      }),
+    ).toBeNull();
+    expect(
+      parseAntigravityUsageResponse({
+        ...(usageEnvelope() as object),
+        command: {
+          name: 'usage',
+          data: {
+            groups: [
+              { name: 'Gemini Models', buckets: [{ window: 'monthly', remaining_fraction: 1 }] },
+            ],
+          },
+        },
       }),
     ).toBeNull();
     expect(parseAntigravityUsageResponse(null)).toBeNull();

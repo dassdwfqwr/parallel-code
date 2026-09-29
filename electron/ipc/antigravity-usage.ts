@@ -127,6 +127,7 @@ function parseGroup(value: unknown, id: AntigravityGroupId): UsageGroup | null {
     if (bucket.kind === 'fiveHour') fiveHour = bucket.window;
     else sevenDay = bucket.window;
   }
+  if (!fiveHour && !sevenDay) return null;
   return {
     id,
     label: id === 'gemini' ? 'Gemini Models' : 'Claude and GPT Models',
@@ -135,9 +136,40 @@ function parseGroup(value: unknown, id: AntigravityGroupId): UsageGroup | null {
   };
 }
 
+const REQUIRED_TOKEN_FIELDS = ['input_tokens', 'output_tokens', 'total_tokens'] as const;
+const TOKEN_FIELD_PATTERN = /(?:tokens?|token_?count)$/i;
+
 /**
- * Parses only the read-only `/usage` command envelope. The zero-turn/token checks
- * prevent a future CLI regression from treating `/usage` as a paid model prompt.
+ * Accept only the zero-token envelope emitted by the read-only `/usage` command.
+ * The required fields pin the schema we have verified, while the recursive scan
+ * fails closed if a newer CLI adds another token counter anywhere under `usage`.
+ */
+function hasOnlyZeroTokenUsage(value: unknown): boolean {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return false;
+  const usage = value as Record<string, unknown>;
+  if (!REQUIRED_TOKEN_FIELDS.every((field) => usage[field] === 0)) return false;
+
+  const visit = (record: Record<string, unknown>): boolean => {
+    for (const [key, nested] of Object.entries(record)) {
+      if (TOKEN_FIELD_PATTERN.test(key) && nested !== 0) return false;
+      if (
+        typeof nested === 'object' &&
+        nested !== null &&
+        !Array.isArray(nested) &&
+        !visit(nested as Record<string, unknown>)
+      ) {
+        return false;
+      }
+    }
+    return true;
+  };
+  return visit(usage);
+}
+
+/**
+ * Parses only the verified zero-turn/zero-token `/usage` response. These checks
+ * detect a CLI regression after the command returns; they cannot prevent a buggy
+ * future CLI from making a model request before producing its response.
  */
 export function parseAntigravityUsageResponse(body: unknown, now = Date.now()): UsageResult | null {
   if (typeof body !== 'object' || body === null) return null;
@@ -148,11 +180,7 @@ export function parseAntigravityUsageResponse(body: unknown, now = Date.now()): 
     command?: unknown;
   };
   if (envelope.status !== 'SUCCESS' || envelope.num_turns !== 0) return null;
-  if (envelope.usage !== undefined) {
-    if (typeof envelope.usage !== 'object' || envelope.usage === null) return null;
-    const totalTokens = (envelope.usage as { total_tokens?: unknown }).total_tokens;
-    if (totalTokens !== undefined && totalTokens !== 0) return null;
-  }
+  if (!hasOnlyZeroTokenUsage(envelope.usage)) return null;
   if (typeof envelope.command !== 'object' || envelope.command === null) return null;
   const command = envelope.command as { name?: unknown; data?: unknown };
   if (command.name !== 'usage' || typeof command.data !== 'object' || command.data === null) {

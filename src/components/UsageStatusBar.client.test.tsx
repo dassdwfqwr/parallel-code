@@ -77,7 +77,7 @@ const popover = () => document.querySelector<HTMLElement>('[data-testid="usage-p
 describe('UsageStatusBar', () => {
   it('shows one headline for Claude and two compact Antigravity group headlines', () => {
     const container = mount();
-    const entries = container.querySelectorAll('[role="status"]');
+    const entries = container.querySelectorAll('[data-testid="usage-provider"]');
     expect(entries).toHaveLength(2);
     expect(entries[0].textContent).toContain('Claude');
     expect(entries[0].textContent).toContain('60% left');
@@ -86,6 +86,9 @@ describe('UsageStatusBar', () => {
     expect(entries[1].textContent).toContain('G 5h');
     expect(entries[1].textContent).toContain('3P 5h');
     expect(entries[1].textContent).not.toContain('Gemini Models');
+    expect(entries[1].getAttribute('aria-label')).toContain('G means Gemini Models');
+    expect(entries[1].getAttribute('aria-label')).toContain('3P means Claude and GPT Models');
+    expect(entries[1].querySelector('[title="Gemini Models · 5h"]')).not.toBeNull();
     expect(container.querySelectorAll('[role="progressbar"]')).toHaveLength(3);
   });
 
@@ -98,7 +101,7 @@ describe('UsageStatusBar', () => {
 
   it('opens a popover with both windows and the refresh time on hover', () => {
     const container = mount();
-    const entry = container.querySelectorAll<HTMLElement>('[role="status"]')[0];
+    const entry = container.querySelectorAll<HTMLElement>('[data-testid="usage-provider"]')[0];
     if (!entry) throw new Error('no provider entry');
     expect(popover()).toBeNull();
 
@@ -116,18 +119,31 @@ describe('UsageStatusBar', () => {
 
   it('refreshes just the clicked provider', () => {
     const container = mount();
-    container.querySelectorAll<HTMLElement>('[role="status"]')[1]?.click();
+    container.querySelectorAll<HTMLElement>('[data-testid="usage-provider"]')[1]?.click();
     expect(mockRefreshUsage).toHaveBeenCalledWith('antigravity', { force: true });
   });
 
   it('shows full Antigravity group names and both windows in the popover', () => {
     const container = mount();
-    const entry = container.querySelectorAll<HTMLElement>('[role="status"]')[1];
+    const entry = container.querySelectorAll<HTMLElement>('[data-testid="usage-provider"]')[1];
     entry.dispatchEvent(new MouseEvent('mouseenter'));
     const card = popover();
     expect(card?.textContent).toContain('Gemini Models');
     expect(card?.textContent).toContain('Claude and GPT Models');
     expect(card?.textContent).toContain('5h');
     expect(card?.textContent).toContain('7d');
+  });
+
+  it('opens details from keyboard focus and keeps narrow layouts horizontally scrollable', () => {
+    const container = mount();
+    const statusBar = container.querySelector<HTMLElement>('[role="group"]');
+    expect(statusBar?.style.overflowX).toBe('auto');
+
+    const entry = container.querySelectorAll<HTMLElement>('[data-testid="usage-provider"]')[1];
+    entry.focus();
+    expect(document.activeElement).toBe(entry);
+    expect(popover()?.textContent).toContain('Gemini Models');
+    entry.blur();
+    expect(popover()).toBeNull();
   });
 });

@@ -57,11 +57,20 @@ function state(provider: UsageProvider = 'claude'): UsageState {
 
 describe('usage store slice', () => {
   let slice: Slice;
+  let visibilityState: DocumentVisibilityState;
+  let fakeDocument: EventTarget;
 
   beforeEach(async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date('2026-09-02T12:00:00Z'));
     mockInvoke.mockReset();
+    visibilityState = 'visible';
+    fakeDocument = new EventTarget();
+    Object.defineProperty(fakeDocument, 'visibilityState', {
+      configurable: true,
+      get: () => visibilityState,
+    });
+    vi.stubGlobal('document', fakeDocument);
     core.harness?.reset({
       usage: {
         claude: { ...IDLE },
@@ -76,6 +85,7 @@ describe('usage store slice', () => {
 
   afterEach(() => {
     slice.stopUsagePolling();
+    vi.unstubAllGlobals();
     vi.useRealTimers();
   });
 
@@ -165,6 +175,62 @@ describe('usage store slice', () => {
     slice.stopUsagePolling();
     await vi.advanceTimersByTimeAsync(10 * 60_000);
     expect(mockInvoke).toHaveBeenCalledTimes(6);
+  });
+
+  it('pauses automatic polling while hidden and refreshes immediately when visible', async () => {
+    mockInvoke.mockResolvedValue(OK);
+    visibilityState = 'hidden';
+    slice.startUsagePolling();
+    await vi.advanceTimersByTimeAsync(10 * 60_000);
+    expect(mockInvoke).not.toHaveBeenCalled();
+
+    visibilityState = 'visible';
+    fakeDocument.dispatchEvent(new Event('visibilitychange'));
+    await vi.advanceTimersByTimeAsync(0);
+    expect(mockInvoke).toHaveBeenCalledTimes(3);
+
+    visibilityState = 'hidden';
+    fakeDocument.dispatchEvent(new Event('visibilitychange'));
+    await vi.advanceTimersByTimeAsync(10 * 60_000);
+    expect(mockInvoke).toHaveBeenCalledTimes(3);
+  });
+
+  it('backs off unavailable providers without blocking manual refreshes', async () => {
+    mockInvoke.mockImplementation((channel: string) =>
+      Promise.resolve(
+        channel === 'get_antigravity_usage'
+          ? { status: 'unavailable', reason: 'not installed' }
+          : OK,
+      ),
+    );
+    slice.startUsagePolling();
+    await vi.advanceTimersByTimeAsync(0);
+    await vi.advanceTimersByTimeAsync(5 * 60_000);
+    expect(
+      mockInvoke.mock.calls.filter(([channel]) => channel === 'get_antigravity_usage'),
+    ).toHaveLength(1);
+
+    await slice.refreshUsage('antigravity', { force: true });
+    expect(
+      mockInvoke.mock.calls.filter(([channel]) => channel === 'get_antigravity_usage'),
+    ).toHaveLength(2);
+  });
+
+  it('backs off transient failures before retrying automatically', async () => {
+    let antigravityAttempts = 0;
+    mockInvoke.mockImplementation((channel: string) => {
+      if (channel !== 'get_antigravity_usage') return Promise.resolve(OK);
+      antigravityAttempts += 1;
+      return Promise.resolve(
+        antigravityAttempts === 1 ? { status: 'error', message: 'temporary' } : OK,
+      );
+    });
+    slice.startUsagePolling();
+    await vi.advanceTimersByTimeAsync(0);
+    await vi.advanceTimersByTimeAsync(5 * 60_000);
+    expect(antigravityAttempts).toBe(1);
+    await vi.advanceTimersByTimeAsync(5 * 60_000);
+    expect(antigravityAttempts).toBe(2);
   });
 
   it('maps the bundled Claude Code and Codex agents to their meters', () => {
